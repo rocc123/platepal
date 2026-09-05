@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { startOfLocalDay, startOfNextLocalDay } from './dates'
-import type { Meal, MealItem, MealSource, Profile, SavedMeal, SessionUser } from './types'
+import { fromUtc, startOfLocalDay, startOfNextLocalDay, zoneStamp } from './dates'
+import { LOOKUP_SEED, inferPeriodId, setLookups, sourceIdByCode, type Lookups } from './lookups'
+import type { Meal, MealItem, MealPeriodRow, MealSourceRow, Profile, SavedMeal, SessionUser } from './types'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim() ?? ''
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() ?? ''
@@ -24,6 +25,75 @@ if (!usingLocalData) {
   client = createClient(supabaseUrl, supabaseAnonKey)
 }
 
+function coerceSourceId(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && /^\d+$/.test(value)) return Number(value)
+  if (typeof value === 'string') {
+    try {
+      return sourceIdByCode(value)
+    } catch {
+      return sourceIdByCode('manual')
+    }
+  }
+  return sourceIdByCode('manual')
+}
+
+function coercePeriodId(value: unknown, eatenAt: string, tzName?: string | null): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && /^\d+$/.test(value)) return Number(value)
+  return inferPeriodId(fromUtc(eatenAt, tzName))
+}
+
+export function normalizeMeal(row: Record<string, unknown>): Meal {
+  const eaten_at = String(row.eaten_at)
+  const tz_name = String(row.tz_name || appZoneFallback())
+  const stamp = zoneStamp(fromUtc(eaten_at, tz_name))
+  return {
+    id: String(row.id),
+    user_id: String(row.user_id),
+    eaten_at,
+    note: (row.note as string | null) ?? null,
+    source_id: coerceSourceId(row.source_id ?? row.source),
+    meal_period_id: coercePeriodId(row.meal_period_id, eaten_at, tz_name),
+    tz_name,
+    tz_offset_minutes: Number(row.tz_offset_minutes ?? stamp.tz_offset_minutes),
+    calories: Number(row.calories ?? 0),
+    protein_g: Number(row.protein_g ?? 0),
+    fiber_g: Number(row.fiber_g ?? 0),
+    carbs_g: Number(row.carbs_g ?? 0),
+    fat_g: Number(row.fat_g ?? 0),
+    confidence: row.confidence == null ? null : Number(row.confidence),
+  }
+}
+
+function appZoneFallback() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+}
+
+export async function loadLookups(): Promise<Lookups> {
+  if (usingLocalData) {
+    setLookups(LOOKUP_SEED)
+    return LOOKUP_SEED
+  }
+  try {
+    const supabase = getSupabase()
+    const [sources, periods] = await Promise.all([
+      supabase.from('meal_sources').select('*').order('sort_order'),
+      supabase.from('meal_periods').select('*').order('sort_order'),
+    ])
+    if (sources.error || periods.error) throw sources.error ?? periods.error
+    const next: Lookups = {
+      sources: (sources.data as MealSourceRow[] | null) ?? LOOKUP_SEED.sources,
+      periods: (periods.data as MealPeriodRow[] | null) ?? LOOKUP_SEED.periods,
+    }
+    setLookups(next)
+    return next
+  } catch {
+    setLookups(LOOKUP_SEED)
+    return LOOKUP_SEED
+  }
+}
+
 export function getSupabase(): SupabaseClient {
   if (!client) {
     throw new Error('Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.')
@@ -39,7 +109,9 @@ function readDb(): LocalDb {
   try {
     const raw = localStorage.getItem(DB_KEY)
     if (!raw) return emptyDb()
-    return { ...emptyDb(), ...JSON.parse(raw) }
+    const parsed = { ...emptyDb(), ...JSON.parse(raw) } as LocalDb
+    parsed.meals = (parsed.meals ?? []).map((meal) => normalizeMeal(meal as unknown as Record<string, unknown>))
+    return parsed
   } catch {
     return emptyDb()
   }
@@ -223,7 +295,26 @@ export async function fetchMealsForRange(userId: string, start: Date, end: Date)
     .lt('eaten_at', endIso)
     .order('eaten_at', { ascending: true })
   if (error) throw new Error(error.message)
-  return (data ?? []) as Meal[]
+  return (data ?? []).map((row) => normalizeMeal(row as Record<string, unknown>))
+}
+
+export async function fetchLatestMeal(userId: string): Promise<Meal | null> {
+  if (usingLocalData) {
+    return (
+      readDb()
+        .meals.filter((m) => m.user_id === userId)
+        .sort((a, b) => b.eaten_at.localeCompare(a.eaten_at))[0] ?? null
+    )
+  }
+  const { data, error } = await getSupabase()
+    .from('meals')
+    .select('*')
+    .eq('user_id', userId)
+    .order('eaten_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return data ? normalizeMeal(data as Record<string, unknown>) : null
 }
 
 export async function fetchMealsForDay(userId: string, day: Date): Promise<Meal[]> {
@@ -253,13 +344,16 @@ export async function fetchMealWithItems(
     .eq('meal_id', mealId)
     .order('sort_order', { ascending: true })
   if (itemError) throw new Error(itemError.message)
-  return { meal: meal as Meal, items: (items ?? []) as MealItem[] }
+  return { meal: normalizeMeal(meal as Record<string, unknown>), items: (items ?? []) as MealItem[] }
 }
 
 type MealWrite = {
   note: string | null
-  source: MealSource
+  source_id: number
+  meal_period_id: number
   eaten_at: string
+  tz_name: string
+  tz_offset_minutes: number
   calories: number
   protein_g: number
   fiber_g: number
@@ -292,7 +386,10 @@ export async function createMeal(userId: string, input: MealWrite): Promise<{ id
       user_id: userId,
       eaten_at: input.eaten_at,
       note: input.note,
-      source: input.source,
+      source_id: input.source_id,
+      meal_period_id: input.meal_period_id,
+      tz_name: input.tz_name,
+      tz_offset_minutes: input.tz_offset_minutes,
       calories: input.calories,
       protein_g: input.protein_g,
       fiber_g: input.fiber_g,
@@ -313,7 +410,10 @@ export async function createMeal(userId: string, input: MealWrite): Promise<{ id
       user_id: userId,
       eaten_at: input.eaten_at,
       note: input.note,
-      source: input.source,
+      source_id: input.source_id,
+      meal_period_id: input.meal_period_id,
+      tz_name: input.tz_name,
+      tz_offset_minutes: input.tz_offset_minutes,
       calories: input.calories,
       protein_g: input.protein_g,
       fiber_g: input.fiber_g,
@@ -340,8 +440,11 @@ export async function updateMeal(mealId: string, userId: string, input: MealWrit
     db.meals[index] = {
       ...db.meals[index],
       note: input.note,
-      source: input.source,
+      source_id: input.source_id,
+      meal_period_id: input.meal_period_id,
       eaten_at: input.eaten_at,
+      tz_name: input.tz_name,
+      tz_offset_minutes: input.tz_offset_minutes,
       calories: input.calories,
       protein_g: input.protein_g,
       fiber_g: input.fiber_g,
@@ -361,8 +464,11 @@ export async function updateMeal(mealId: string, userId: string, input: MealWrit
     .from('meals')
     .update({
       note: input.note,
-      source: input.source,
+      source_id: input.source_id,
+      meal_period_id: input.meal_period_id,
       eaten_at: input.eaten_at,
+      tz_name: input.tz_name,
+      tz_offset_minutes: input.tz_offset_minutes,
       calories: input.calories,
       protein_g: input.protein_g,
       fiber_g: input.fiber_g,

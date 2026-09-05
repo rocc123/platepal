@@ -2,7 +2,7 @@
 
 Personal protein + fiber tracker. Snap a meal photo or type a note, edit the estimate, and save it. Protein and fiber are the main numbers. Calories stay in the background.
 
-This repo follows `PLAN.md`.
+This repo follows `PLAN.md`. Meal sources and breakfast/lunch/dinner/snack live in lookup tables. `eaten_at` is stored in UTC with the app timezone name and offset (Luxon).
 
 ## Run locally
 
@@ -24,7 +24,7 @@ VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
 ```
 
-2. In the Supabase project, run `supabase/migrations/0001_init.sql`.
+2. In the Supabase project, run `supabase/migrations/0001_init.sql`, then `0002_lookups_and_timezone.sql`.
 3. Turn on email magic link. Google OAuth is optional. Add the Vite origin and the production host to Site URL + Redirect URLs.
 4. Deploy the `analyze` Edge Function and set secrets:
 

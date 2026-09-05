@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useUser } from '../components/AuthGate'
+import { inferPeriodFromWhen, nowLocal, zoneStamp } from '../lib/dates'
+import { sourceIdByCode } from '../lib/lookups'
 import { createMeal, deleteSavedMeal, fetchSavedMeals, renameSavedMeal } from '../lib/supabase'
 import type { MealItem, SavedMeal } from '../lib/types'
 
@@ -41,10 +43,12 @@ export function SavedMealsPage() {
     setError(null)
     try {
       const items = (saved.items ?? []) as MealItem[]
+      const when = nowLocal()
       await createMeal(user.id, {
         note: saved.note || saved.name,
-        source: 'saved',
-        eaten_at: new Date().toISOString(),
+        source_id: sourceIdByCode('saved'),
+        meal_period_id: inferPeriodFromWhen(when),
+        ...zoneStamp(when),
         calories: saved.calories,
         protein_g: saved.protein_g,
         fiber_g: saved.fiber_g,

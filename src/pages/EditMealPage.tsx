@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { MealEditor } from '../components/MealEditor'
 import { useUser } from '../components/AuthGate'
-import { createSavedMeal, deleteMeal, fetchMealWithItems, updateMeal } from '../lib/supabase'
+import { dateTimeFromInputs, fromUtc, inferPeriodFromWhen, localDateInput, localTimeInput, zoneStamp } from '../lib/dates'
+import { getLookups } from '../lib/lookups'
+import { createSavedMeal, deleteMeal, fetchMealWithItems, loadLookups, updateMeal } from '../lib/supabase'
 import { sumItems } from '../lib/totals'
 import type { Meal, MealItem } from '../lib/types'
 
@@ -17,6 +19,11 @@ export function EditMealPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
+  const [lookups, setLookupsState] = useState(getLookups)
+  const [date, setDate] = useState('')
+  const [time, setTime] = useState('')
+  const [periodId, setPeriodId] = useState(0)
+  const [periodTouched, setPeriodTouched] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -31,6 +38,10 @@ export function EditMealPage() {
         setMeal(row.meal)
         setNote(row.meal.note ?? '')
         setItems(row.items)
+        const when = fromUtc(row.meal.eaten_at, row.meal.tz_name)
+        setDate(localDateInput(when))
+        setTime(localTimeInput(when))
+        setPeriodId(row.meal.meal_period_id)
       })
       .catch((err: unknown) => {
         if (!active) return
@@ -44,6 +55,10 @@ export function EditMealPage() {
     }
   }, [id, user.id])
 
+  useEffect(() => {
+    loadLookups().then(setLookupsState)
+  }, [])
+
   async function onSave() {
     if (!meal) return
     const named = items.filter((item) => item.name.trim())
@@ -55,12 +70,14 @@ export function EditMealPage() {
     setError(null)
     try {
       const totals = sumItems(named)
+      const stamp = zoneStamp(dateTimeFromInputs(date, time))
       await updateMeal(meal.id, user.id, {
         note: note.trim() || named[0].name,
-        source: meal.source,
-        eaten_at: meal.eaten_at,
+        source_id: meal.source_id,
+        meal_period_id: periodId,
         confidence: meal.confidence,
         items: named,
+        ...stamp,
         ...totals,
       })
       navigate('/', { replace: true })
@@ -129,6 +146,10 @@ export function EditMealPage() {
       <MealEditor
         note={note}
         items={items}
+        date={date}
+        time={time}
+        periodId={periodId}
+        lookups={lookups}
         confidence={meal.confidence}
         assumptions=""
         saveAsTemplate={false}
@@ -137,6 +158,30 @@ export function EditMealPage() {
         error={error}
         onNoteChange={setNote}
         onItemsChange={setItems}
+        onDateChange={(next) => {
+          setDate(next)
+          if (!periodTouched) {
+            try {
+              setPeriodId(inferPeriodFromWhen(dateTimeFromInputs(next, time)))
+            } catch {
+              /* keep */
+            }
+          }
+        }}
+        onTimeChange={(next) => {
+          setTime(next)
+          if (!periodTouched) {
+            try {
+              setPeriodId(inferPeriodFromWhen(dateTimeFromInputs(date, next)))
+            } catch {
+              /* keep */
+            }
+          }
+        }}
+        onPeriodChange={(next) => {
+          setPeriodId(next)
+          setPeriodTouched(true)
+        }}
         onSaveAsTemplateChange={() => undefined}
         onSave={onSave}
         onCancel={() => navigate('/')}

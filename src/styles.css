@@ -280,6 +280,8 @@ a {
 input[type='text'],
 input[type='email'],
 input[type='number'],
+input[type='date'],
+input[type='time'],
 textarea {
   width: 100%;
   min-height: 48px;
@@ -505,10 +507,40 @@ textarea {
   clip: rect(0 0 0 0);
 }
 
-.range-toggle {
+.range-toggle,
+.period-toggle {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 8px;
+}
+
+.period-toggle {
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+}
+
+.period-toggle .btn,
+.period-toggle .btn-secondary,
+.range-toggle .btn,
+.range-toggle .btn-secondary {
+  padding: 0 8px;
+  font-size: 0.88rem;
+}
+
+.when {
+  display: grid;
+  gap: 10px;
+}
+
+.last-ate {
+  display: grid;
+  gap: 4px;
+}
+
+.last-ate-label {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
 }
 
 .chart-card {

@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
-import { getCurrentUser, onAuthChange } from '../lib/supabase'
+import { getCurrentUser, loadLookups, onAuthChange } from '../lib/supabase'
 import type { SessionUser } from '../lib/types'
 
 const AuthContext = createContext<SessionUser | null>(null)
@@ -16,6 +16,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true
+    void loadLookups()
     getCurrentUser().then((next) => {
       if (active) setUser(next)
     })

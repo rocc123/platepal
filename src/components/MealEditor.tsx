@@ -1,11 +1,17 @@
 import { FoodSearch } from './FoodSearch'
+import { MealWhen } from './MealWhen'
 import { scaleFrom100g } from '../lib/foods'
+import type { Lookups } from '../lib/lookups'
 import { sumItems } from '../lib/totals'
 import type { MealItem } from '../lib/types'
 
 type MealEditorProps = {
   note: string
   items: MealItem[]
+  date: string
+  time: string
+  periodId: number
+  lookups: Lookups
   confidence: number | null
   assumptions: string
   saveAsTemplate: boolean
@@ -14,6 +20,9 @@ type MealEditorProps = {
   error: string | null
   onNoteChange: (note: string) => void
   onItemsChange: (items: MealItem[]) => void
+  onDateChange: (date: string) => void
+  onTimeChange: (time: string) => void
+  onPeriodChange: (periodId: number) => void
   onSaveAsTemplateChange: (checked: boolean) => void
   onSave: () => void
   onCancel: () => void
@@ -47,6 +56,10 @@ function parseGrams(value: string): number | null {
 export function MealEditor({
   note,
   items,
+  date,
+  time,
+  periodId,
+  lookups,
   confidence,
   assumptions,
   saveAsTemplate,
@@ -55,6 +68,9 @@ export function MealEditor({
   error,
   onNoteChange,
   onItemsChange,
+  onDateChange,
+  onTimeChange,
+  onPeriodChange,
   onSaveAsTemplateChange,
   onSave,
   onCancel,
@@ -78,6 +94,15 @@ export function MealEditor({
 
   return (
     <div className="page">
+      <MealWhen
+        date={date}
+        time={time}
+        periodId={periodId}
+        lookups={lookups}
+        onDateChange={onDateChange}
+        onTimeChange={onTimeChange}
+        onPeriodChange={onPeriodChange}
+      />
       <label className="field">
         <span>Note</span>
         <textarea

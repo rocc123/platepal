@@ -6,10 +6,19 @@ import { MealEditor } from '../components/MealEditor'
 import { PhotoPicker } from '../components/PhotoPicker'
 import { useUser } from '../components/AuthGate'
 import { analyzeMeal, resizeImageToJpeg } from '../lib/analyze'
-import { eatenAtForDay, parseLocalDayKey } from '../lib/dates'
-import { createMeal, createSavedMeal } from '../lib/supabase'
+import {
+  dateTimeFromInputs,
+  defaultWhenForDay,
+  inferPeriodFromWhen,
+  localDateInput,
+  localTimeInput,
+  parseLocalDayKey,
+  zoneStamp,
+} from '../lib/dates'
+import { getLookups, sourceIdByCode } from '../lib/lookups'
+import { createMeal, createSavedMeal, loadLookups } from '../lib/supabase'
 import { sumItems } from '../lib/totals'
-import type { MealItem, MealSource } from '../lib/types'
+import type { MealItem } from '../lib/types'
 
 function blankItem(): MealItem {
   return {
@@ -32,17 +41,27 @@ export function AddMealPage() {
   function goBack(replace = false) {
     navigate(dayKey ? `/?d=${dayKey}` : '/', { replace })
   }
+  const initialWhen = defaultWhenForDay(day)
+  const [lookups, setLookupsState] = useState(getLookups)
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [note, setNote] = useState('')
   const [items, setItems] = useState<MealItem[] | null>(null)
+  const [date, setDate] = useState(() => localDateInput(initialWhen))
+  const [time, setTime] = useState(() => localTimeInput(initialWhen))
+  const [periodId, setPeriodId] = useState(() => inferPeriodFromWhen(initialWhen))
+  const [periodTouched, setPeriodTouched] = useState(false)
   const [confidence, setConfidence] = useState<number | null>(null)
   const [assumptions, setAssumptions] = useState('')
-  const [source, setSource] = useState<MealSource>('manual')
+  const [sourceId, setSourceId] = useState(() => sourceIdByCode('manual'))
   const [saveAsTemplate, setSaveAsTemplate] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    loadLookups().then(setLookupsState)
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -62,6 +81,15 @@ export function AddMealPage() {
     setPreviewUrl(null)
   }
 
+  function syncPeriod(nextDate: string, nextTime: string) {
+    if (periodTouched) return
+    try {
+      setPeriodId(inferPeriodFromWhen(dateTimeFromInputs(nextDate, nextTime)))
+    } catch {
+      // keep current period until the inputs are valid
+    }
+  }
+
   async function onAnalyze() {
     setAnalyzing(true)
     setError(null)
@@ -79,7 +107,7 @@ export function AddMealPage() {
       setItems(result.items.length ? result.items : [blankItem()])
       setConfidence(result.confidence)
       setAssumptions(result.assumptions)
-      setSource(file ? 'photo' : 'text')
+      setSourceId(sourceIdByCode(file ? 'photo' : 'text'))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analyze failed.')
     } finally {
@@ -91,7 +119,7 @@ export function AddMealPage() {
     setItems([note.trim() ? { ...blankItem(), name: note.trim() } : blankItem()])
     setConfidence(null)
     setAssumptions('')
-    setSource('manual')
+    setSourceId(sourceIdByCode('manual'))
     setError(null)
   }
 
@@ -105,13 +133,15 @@ export function AddMealPage() {
     setSaving(true)
     setError(null)
     try {
+      const stamp = zoneStamp(dateTimeFromInputs(date, time))
       const totals = sumItems(named)
       await createMeal(user.id, {
         note: note.trim() || named[0].name,
-        source,
-        eaten_at: eatenAtForDay(day),
+        source_id: sourceId,
+        meal_period_id: periodId,
         confidence,
         items: named,
+        ...stamp,
         ...totals,
       })
       if (saveAsTemplate) {
@@ -142,17 +172,17 @@ export function AddMealPage() {
             setNote((current) => current.trim() || item.name)
             setConfidence(0.7)
             setAssumptions(`USDA FoodData Central, per ${hit.grams}g. Edit if your portion is different.`)
-            setSource('manual')
+            setSourceId(sourceIdByCode('manual'))
             setError(null)
           }}
         />
         <BarcodePicker
-          onPick={(item, assumptions) => {
+          onPick={(item, nextAssumptions) => {
             setItems([item])
             setNote((current) => current.trim() || item.name)
             setConfidence(0.8)
-            setAssumptions(assumptions)
-            setSource('manual')
+            setAssumptions(nextAssumptions)
+            setSourceId(sourceIdByCode('manual'))
             setError(null)
           }}
         />
@@ -186,6 +216,10 @@ export function AddMealPage() {
       <MealEditor
         note={note}
         items={items}
+        date={date}
+        time={time}
+        periodId={periodId}
+        lookups={lookups}
         confidence={confidence}
         assumptions={assumptions}
         saveAsTemplate={saveAsTemplate}
@@ -194,6 +228,18 @@ export function AddMealPage() {
         error={error}
         onNoteChange={setNote}
         onItemsChange={setItems}
+        onDateChange={(next) => {
+          setDate(next)
+          syncPeriod(next, time)
+        }}
+        onTimeChange={(next) => {
+          setTime(next)
+          syncPeriod(date, next)
+        }}
+        onPeriodChange={(next) => {
+          setPeriodId(next)
+          setPeriodTouched(true)
+        }}
         onSaveAsTemplateChange={setSaveAsTemplate}
         onSave={onSave}
         onCancel={goBack}

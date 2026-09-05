@@ -1,4 +1,18 @@
-export type MealSource = 'photo' | 'text' | 'saved' | 'manual'
+export type MealSourceRow = {
+  id: number
+  code: string
+  label: string
+  sort_order: number
+}
+
+export type MealPeriodRow = {
+  id: number
+  code: string
+  label: string
+  sort_order: number
+  start_hour: number | null
+  end_hour: number | null
+}
 
 export type MealItem = {
   id?: string
@@ -24,7 +38,10 @@ export type Meal = {
   user_id: string
   eaten_at: string
   note: string | null
-  source: MealSource
+  source_id: number
+  meal_period_id: number
+  tz_name: string
+  tz_offset_minutes: number
   calories: number
   protein_g: number
   fiber_g: number

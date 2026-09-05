@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useUser } from '../components/AuthGate'
-import { addDays, localDayKey, startOfLocalDay, startOfNextLocalDay, weekdayShort } from '../lib/dates'
+import { addDays, localDayKey, mealDayKey, startOfLocalDay, startOfNextLocalDay, weekdayShort } from '../lib/dates'
 import { ensureProfile, fetchMealsForRange } from '../lib/supabase'
 import { sumMeals } from '../lib/totals'
 import type { Meal, Profile } from '../lib/types'
@@ -21,7 +21,7 @@ function buildDays(range: RangeDays, meals: Meal[]): DayPoint[] {
   const start = addDays(today, -(range - 1))
   const byDay = new Map<string, Meal[]>()
   for (const meal of meals) {
-    const key = localDayKey(new Date(meal.eaten_at))
+    const key = mealDayKey(meal.eaten_at, meal.tz_name)
     const list = byDay.get(key) ?? []
     list.push(meal)
     byDay.set(key, list)

@@ -3,8 +3,9 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { GoalBar } from '../components/GoalBar'
 import { MealCard } from '../components/MealCard'
 import { useUser } from '../components/AuthGate'
-import { addDays, formatDayLabel, isSameLocalDay, localDayKey, parseLocalDayKey } from '../lib/dates'
-import { ensureProfile, fetchMealsForDay } from '../lib/supabase'
+import { addDays, formatDayLabel, formatSince, isSameLocalDay, localDayKey, parseLocalDayKey } from '../lib/dates'
+import { getLookups, periodById } from '../lib/lookups'
+import { ensureProfile, fetchLatestMeal, fetchMealsForDay, loadLookups } from '../lib/supabase'
 import { sumMeals } from '../lib/totals'
 import type { Meal, Profile } from '../lib/types'
 
@@ -16,6 +17,7 @@ export function TodayPage() {
   const [meals, setMeals] = useState<Meal[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [lastMeal, setLastMeal] = useState<Meal | null>(null)
 
   function goTo(next: Date) {
     setDay(next)
@@ -31,11 +33,12 @@ export function TodayPage() {
   useEffect(() => {
     let active = true
     setLoading(true)
-    Promise.all([ensureProfile(user), fetchMealsForDay(user.id, day)])
-      .then(([nextProfile, nextMeals]) => {
+    Promise.all([ensureProfile(user), fetchMealsForDay(user.id, day), fetchLatestMeal(user.id), loadLookups()])
+      .then(([nextProfile, nextMeals, latest]) => {
         if (!active) return
         setProfile(nextProfile)
         setMeals(nextMeals)
+        setLastMeal(latest)
         setError(null)
       })
       .catch((err: unknown) => {
@@ -71,6 +74,15 @@ export function TodayPage() {
 
       {loading ? <p className="status">Loading…</p> : null}
       {error ? <p className="error">{error}</p> : null}
+
+      {!loading && lastMeal ? (
+        <section className="card last-ate">
+          <p className="last-ate-label">Last ate {formatSince(lastMeal.eaten_at, lastMeal.tz_name)}</p>
+          <p className="muted">
+            {periodById(lastMeal.meal_period_id, getLookups())?.label ?? 'Meal'}
+          </p>
+        </section>
+      ) : null}
 
       {profile && !loading ? (
         <section className="card goal-stack">
