@@ -56,7 +56,7 @@ export function LoginPage() {
       <div className="login-card">
         <div>
           <h1>Plate Pal</h1>
-          <p className="lede">Personal protein + fiber tracker for the two of you.</p>
+          <p className="lede">Personal protein + fiber tracker.</p>
         </div>
 
         {usingLocalData ? (

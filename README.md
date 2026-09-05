@@ -1,6 +1,6 @@
 # Plate Pal
 
-Personal protein + fiber tracker for two people. Snap a meal photo or type a note, edit the estimate, and save it. Protein and fiber are the main numbers. Calories stay in the background.
+Personal protein + fiber tracker. Snap a meal photo or type a note, edit the estimate, and save it. Protein and fiber are the main numbers. Calories stay in the background.
 
 This repo follows `PLAN.md`.
 
