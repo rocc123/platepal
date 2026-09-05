@@ -1,3 +1,9 @@
 {
-  "rewrites": [{ "source": "/((?!assets/).*)", "destination": "/index.html" }]
+  "rewrites": [
+    {
+      "source": "/api/usda/:path*",
+      "destination": "https://api.nal.usda.gov/fdc/v1/:path*"
+    },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }

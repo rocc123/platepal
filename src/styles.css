@@ -367,7 +367,7 @@ textarea {
   transform: translateX(-50%);
   width: min(520px, 100%);
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
   gap: 6px;
   padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
   background: rgba(246, 241, 232, 0.94);
@@ -383,6 +383,7 @@ textarea {
   border-radius: 12px;
   color: var(--muted);
   font-weight: 650;
+  font-size: 0.88rem;
 }
 
 .nav a.active {
@@ -451,4 +452,135 @@ textarea {
   gap: 12px;
   color: var(--muted);
   font-size: 0.92rem;
+}
+
+.lookup {
+  display: grid;
+  gap: 10px;
+}
+
+.hit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.hit {
+  width: 100%;
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  min-height: 52px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+  cursor: pointer;
+}
+
+.hit span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.scan-video {
+  width: 100%;
+  border-radius: 14px;
+  background: #111;
+  min-height: 180px;
+  object-fit: cover;
+}
+
+.file-btn {
+  position: relative;
+}
+
+.file-btn input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.range-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+.chart-card {
+  display: grid;
+  gap: 12px;
+}
+
+.goal-label.protein {
+  color: var(--protein);
+}
+
+.goal-label.fiber {
+  color: var(--fiber);
+}
+
+.chart {
+  display: grid;
+  gap: 4px;
+  align-items: end;
+  min-height: 160px;
+}
+
+.chart-col {
+  display: grid;
+  grid-template-rows: 120px auto auto;
+  gap: 4px;
+  text-align: center;
+  text-decoration: none;
+  min-width: 0;
+}
+
+.chart-col span {
+  font-size: 0.68rem;
+  color: var(--muted);
+  overflow: hidden;
+}
+
+.chart-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-track {
+  position: relative;
+  height: 120px;
+  border-radius: 8px 8px 4px 4px;
+  background: #efe7d8;
+  overflow: hidden;
+}
+
+.chart-fill {
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: 0;
+  border-radius: 6px 6px 2px 2px;
+}
+
+.chart-fill.protein {
+  background: var(--protein);
+}
+
+.chart-fill.fiber {
+  background: var(--fiber);
+}
+
+.chart-fill.calories {
+  background: #8a8174;
+}
+
+.chart-goal-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed #7a7166;
 }

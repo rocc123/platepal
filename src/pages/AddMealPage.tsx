@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { BarcodePicker } from '../components/BarcodePicker'
+import { FoodSearch } from '../components/FoodSearch'
 import { MealEditor } from '../components/MealEditor'
 import { PhotoPicker } from '../components/PhotoPicker'
 import { useUser } from '../components/AuthGate'
 import { analyzeMeal, resizeImageToJpeg } from '../lib/analyze'
+import { eatenAtForDay, parseLocalDayKey } from '../lib/dates'
 import { createMeal, createSavedMeal } from '../lib/supabase'
 import { sumItems } from '../lib/totals'
 import type { MealItem, MealSource } from '../lib/types'
@@ -23,6 +26,12 @@ function blankItem(): MealItem {
 export function AddMealPage() {
   const user = useUser()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const day = parseLocalDayKey(searchParams.get('d')) ?? new Date()
+  const dayKey = searchParams.get('d')
+  function goBack(replace = false) {
+    navigate(dayKey ? `/?d=${dayKey}` : '/', { replace })
+  }
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [note, setNote] = useState('')
@@ -100,7 +109,7 @@ export function AddMealPage() {
       await createMeal(user.id, {
         note: note.trim() || named[0].name,
         source,
-        eaten_at: new Date().toISOString(),
+        eaten_at: eatenAtForDay(day),
         confidence,
         items: named,
         ...totals,
@@ -113,7 +122,7 @@ export function AddMealPage() {
           ...totals,
         })
       }
-      navigate('/', { replace: true })
+      goBack(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save meal.')
       setSaving(false)
@@ -127,6 +136,26 @@ export function AddMealPage() {
           <h1>Add meal</h1>
         </div>
         <PhotoPicker previewUrl={previewUrl} onPick={pickFile} onClear={clearFile} />
+        <FoodSearch
+          onPick={(item, hit) => {
+            setItems([item])
+            setNote((current) => current.trim() || item.name)
+            setConfidence(0.7)
+            setAssumptions(`USDA FoodData Central, per ${hit.grams}g. Edit if your portion is different.`)
+            setSource('manual')
+            setError(null)
+          }}
+        />
+        <BarcodePicker
+          onPick={(item, assumptions) => {
+            setItems([item])
+            setNote((current) => current.trim() || item.name)
+            setConfidence(0.8)
+            setAssumptions(assumptions)
+            setSource('manual')
+            setError(null)
+          }}
+        />
         <label className="field">
           <span>Note</span>
           <textarea
@@ -143,7 +172,7 @@ export function AddMealPage() {
           <button type="button" className="btn-secondary" disabled={analyzing} onClick={onManual}>
             Enter by hand
           </button>
-          <button type="button" className="btn-secondary" onClick={() => navigate('/')}>
+          <button type="button" className="btn-secondary" onClick={() => goBack()}>
             Cancel
           </button>
         </div>
@@ -167,7 +196,7 @@ export function AddMealPage() {
         onItemsChange={setItems}
         onSaveAsTemplateChange={setSaveAsTemplate}
         onSave={onSave}
-        onCancel={() => navigate('/')}
+        onCancel={goBack}
       />
     </div>
   )

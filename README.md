@@ -102,7 +102,11 @@ Netlify works too: same `dist` output, and `public/_redirects` is already in the
 - Saved meal templates
 - Settings for name and goals
 - Basic PWA shell (Add to Home Screen)
+- USDA food search and Open Food Facts barcodes
+- Multi-day protein/fiber charts
+
+Food search uses the USDA FoodData Central `DEMO_KEY` unless you set `VITE_USDA_API_KEY` (free at [api.data.gov](https://api.data.gov/signup/)). Barcodes go to Open Food Facts. Neither key belongs in Supabase secrets.
 
 ## Out of scope
 
-Barcode lookup, photo storage, sharing meals, coaching, charts, and household dashboards. See `PLAN.md`.
+Photo storage, sharing meals, coaching, and household dashboards. See `PLAN.md`.

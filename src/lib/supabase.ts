@@ -207,23 +207,28 @@ export async function saveProfile(profile: Profile): Promise<{ error?: string }>
   return {}
 }
 
-export async function fetchMealsForDay(userId: string, day: Date): Promise<Meal[]> {
-  const start = startOfLocalDay(day).toISOString()
-  const end = startOfNextLocalDay(day).toISOString()
+export async function fetchMealsForRange(userId: string, start: Date, end: Date): Promise<Meal[]> {
+  const startIso = start.toISOString()
+  const endIso = end.toISOString()
   if (usingLocalData) {
     return readDb()
-      .meals.filter((m) => m.user_id === userId && m.eaten_at >= start && m.eaten_at < end)
-      .sort((a, b) => b.eaten_at.localeCompare(a.eaten_at))
+      .meals.filter((m) => m.user_id === userId && m.eaten_at >= startIso && m.eaten_at < endIso)
+      .sort((a, b) => a.eaten_at.localeCompare(b.eaten_at))
   }
   const { data, error } = await getSupabase()
     .from('meals')
     .select('*')
     .eq('user_id', userId)
-    .gte('eaten_at', start)
-    .lt('eaten_at', end)
-    .order('eaten_at', { ascending: false })
+    .gte('eaten_at', startIso)
+    .lt('eaten_at', endIso)
+    .order('eaten_at', { ascending: true })
   if (error) throw new Error(error.message)
   return (data ?? []) as Meal[]
+}
+
+export async function fetchMealsForDay(userId: string, day: Date): Promise<Meal[]> {
+  const meals = await fetchMealsForRange(userId, startOfLocalDay(day), startOfNextLocalDay(day))
+  return [...meals].sort((a, b) => b.eaten_at.localeCompare(a.eaten_at))
 }
 
 export async function fetchMealWithItems(

@@ -1,3 +1,5 @@
+import { FoodSearch } from './FoodSearch'
+import { scaleFrom100g } from '../lib/foods'
 import { sumItems } from '../lib/totals'
 import type { MealItem } from '../lib/types'
 
@@ -62,7 +64,16 @@ export function MealEditor({
   const totals = sumItems(items)
 
   function updateItem(index: number, patch: Partial<MealItem>) {
-    onItemsChange(items.map((item, i) => (i === index ? { ...item, ...patch } : item)))
+    onItemsChange(
+      items.map((item, i) => {
+        if (i !== index) return item
+        const next = { ...item, ...patch }
+        if (patch.grams != null && item.per_100g) {
+          return { ...next, ...scaleFrom100g(item.per_100g, patch.grams) }
+        }
+        return next
+      }),
+    )
   }
 
   return (
@@ -84,6 +95,13 @@ export function MealEditor({
           {assumptions ? <span>{assumptions}</span> : null}
         </div>
       )}
+
+      <FoodSearch
+        onPick={(item) => {
+          const named = items.filter((row) => row.name.trim())
+          onItemsChange(named.length ? [...named, item] : [item])
+        }}
+      />
 
       <div className="editor-items">
         {items.map((item, index) => (

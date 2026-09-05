@@ -10,6 +10,13 @@ export type MealItem = {
   carbs_g: number
   fat_g: number
   sort_order?: number
+  per_100g?: {
+    calories: number
+    protein_g: number
+    fiber_g: number
+    carbs_g: number
+    fat_g: number
+  }
 }
 
 export type Meal = {
