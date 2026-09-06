@@ -118,7 +118,9 @@ export function TodayPage() {
 
       <section className="meal-list">
         {!loading && meals.length === 0 ? (
-          <p className="status">No meals yet. Add breakfast.</p>
+          <div className="empty">
+            <p>No meals yet. Add breakfast.</p>
+          </div>
         ) : (
           meals.map((meal) => <MealCard key={meal.id} meal={meal} />)
         )}

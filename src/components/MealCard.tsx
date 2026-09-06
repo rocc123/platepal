@@ -9,12 +9,13 @@ export function MealCard({ meal }: { meal: Meal }) {
   return (
     <Link className="card meal-card" to={`/meals/${meal.id}`}>
       <time dateTime={meal.eaten_at}>
-        {period ? `${period.label} · ` : ''}
+        {period ? `${period.label}` : 'Meal'}
+        <br />
         {formatTime(meal.eaten_at, meal.tz_name)}
       </time>
       <strong>{title}</strong>
       <span>
-        {meal.protein_g}g protein · {meal.fiber_g}g fiber
+        {meal.protein_g}g protein, {meal.fiber_g}g fiber
       </span>
     </Link>
   )

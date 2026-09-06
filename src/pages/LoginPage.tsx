@@ -55,8 +55,13 @@ export function LoginPage() {
     <div className="login">
       <div className="login-card">
         <div>
+          <svg className="login-mark" viewBox="0 0 64 64" aria-hidden="true">
+            <circle cx="32" cy="36" r="18" fill="#f7f9fb" stroke="#0b7a74" strokeWidth="3" />
+            <circle cx="32" cy="36" r="6" fill="#d5ecea" />
+            <path d="M18 16h28" stroke="#3b4f8a" strokeWidth="3" strokeLinecap="round" />
+          </svg>
           <h1>Plate Pal</h1>
-          <p className="lede">Personal protein + fiber tracker.</p>
+          <p className="lede">Protein and fiber, meal by meal.</p>
         </div>
 
         {usingLocalData ? (

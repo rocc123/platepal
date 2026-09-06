@@ -4,8 +4,8 @@
   "description": "Personal protein and fiber tracker",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f6f1e8",
-  "theme_color": "#f6f1e8",
+  "background_color": "#dce6ee",
+  "theme_color": "#dce6ee",
   "icons": [
     {
       "src": "/icons/icon-192.png",
