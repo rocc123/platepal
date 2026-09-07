@@ -208,7 +208,7 @@ export async function signInWithMagicLink(email: string): Promise<{ error?: stri
 
   const { error } = await getSupabase().auth.signInWithOtp({
     email: trimmed,
-    options: { emailRedirectTo: authRedirectTo(), shouldCreateUser: true },
+    options: { shouldCreateUser: true },
   })
   if (error) return { error: error.message }
   rememberOtpEmail(trimmed)
