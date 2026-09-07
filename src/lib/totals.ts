@@ -47,3 +47,25 @@ export function sumMeals(meals: Meal[]): NutritionTotals {
     }, emptyTotals()),
   )
 }
+
+export function formatGrams(value: number): string {
+  const rounded = Math.round(value * 10) / 10
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)
+}
+
+export function formatFocusLine(protein: number, fiber: number): string {
+  return `${formatGrams(protein)}g protein · ${formatGrams(fiber)}g fiber`
+}
+
+export function formatOtherLine(
+  calories: number,
+  carbs: number,
+  fat: number,
+  includeCalories = true,
+): string {
+  const parts: string[] = []
+  if (includeCalories) parts.push(`${Math.round(calories)} cal`)
+  parts.push(`${formatGrams(carbs)}g carbs`)
+  parts.push(`${formatGrams(fat)}g fat`)
+  return parts.join(' · ')
+}

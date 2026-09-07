@@ -17,6 +17,8 @@ type DayPoint = {
   protein: number
   fiber: number
   calories: number
+  carbs: number
+  fat: number
   fastingMinutes: number | null
   fastStart: DateTime | null
   fastEnd: DateTime | null
@@ -50,6 +52,8 @@ function buildDays(range: RangeDays, meals: Meal[], now: DateTime<boolean> = Dat
       protein: totals.protein_g,
       fiber: totals.fiber_g,
       calories: totals.calories,
+      carbs: totals.carbs_g,
+      fat: totals.fat_g,
       fastingMinutes: overnight?.minutes ?? null,
       fastStart: overnight?.start ?? null,
       fastEnd: overnight?.end ?? null,
@@ -71,7 +75,7 @@ function Chart({
   unit: string
   points: DayPoint[]
   goal?: number
-  variant: 'protein' | 'fiber' | 'calories'
+  variant: 'protein' | 'fiber' | 'calories' | 'carbs' | 'fat'
   valueOf: (point: DayPoint) => number | null
 }) {
   const values = points.map(valueOf)
@@ -138,7 +142,9 @@ export function ChartsPage() {
   }, [user, range])
 
   const points = useMemo(() => buildDays(range, meals), [range, meals])
-  const daysLogged = points.filter((p) => p.protein > 0 || p.fiber > 0 || p.calories > 0).length
+  const daysLogged = points.filter(
+    (p) => p.protein > 0 || p.fiber > 0 || p.calories > 0 || p.carbs > 0 || p.fat > 0,
+  ).length
   const proteinHits = profile ? points.filter((p) => p.protein >= profile.protein_goal_g).length : 0
   const fiberHits = profile ? points.filter((p) => p.fiber >= profile.fiber_goal_g).length : 0
   const fastingDays = points.filter((p) => p.fastingMinutes != null).length
@@ -202,6 +208,20 @@ export function ChartsPage() {
               valueOf={(point) => point.calories}
             />
           ) : null}
+          <Chart
+            label="Carbs"
+            unit="g"
+            points={points}
+            variant="carbs"
+            valueOf={(point) => point.carbs}
+          />
+          <Chart
+            label="Fat"
+            unit="g"
+            points={points}
+            variant="fat"
+            valueOf={(point) => point.fat}
+          />
           <FastingChart points={points} />
         </>
       ) : null}

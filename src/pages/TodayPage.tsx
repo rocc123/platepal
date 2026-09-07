@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { FastingCard } from '../components/FastingCard'
 import { GoalBar } from '../components/GoalBar'
 import { MealCard } from '../components/MealCard'
+import { OtherMacros } from '../components/OtherMacros'
 import { useUser } from '../components/AuthGate'
 import { addDays, formatDayLabel, isSameLocalDay, localDayKey, parseLocalDayKey, startOfLocalDay } from '../lib/dates'
 import { firstMealOfDay } from '../lib/fasting'
@@ -121,9 +122,13 @@ export function TodayPage() {
               unit="cal"
               variant="calories"
             />
-          ) : (
-            <p className="cal-plain">{Math.round(totals.calories)} cal</p>
-          )}
+          ) : null}
+          <OtherMacros
+            calories={totals.calories}
+            carbs={totals.carbs_g}
+            fat={totals.fat_g}
+            showCalories={!profile.calorie_goal}
+          />
         </section>
       ) : null}
 
