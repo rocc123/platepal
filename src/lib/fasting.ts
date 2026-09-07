@@ -35,6 +35,15 @@ export function formatFastDuration(minutes: number): string {
   return `${hours}h ${rest}m`
 }
 
+export function splitFastSeconds(totalSeconds: number): { hours: number; minutes: number; seconds: number } {
+  const value = Math.max(0, Math.floor(totalSeconds))
+  return {
+    hours: Math.floor(value / 3600),
+    minutes: Math.floor((value % 3600) / 60),
+    seconds: value % 60,
+  }
+}
+
 export type FastingStatus =
   | { kind: 'none' }
   | { kind: 'eating'; meal: Meal; remainingMinutes: number }

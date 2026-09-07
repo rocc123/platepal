@@ -1,4 +1,3 @@
-import { DateTime } from 'luxon'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { FastingCard } from '../components/FastingCard'
@@ -21,9 +20,9 @@ export function TodayPage() {
   const [loading, setLoading] = useState(true)
   const [lastMeal, setLastMeal] = useState<Meal | null>(null)
   const [previousMeal, setPreviousMeal] = useState<Meal | null>(null)
-  const [nowMs, setNowMs] = useState(() => Date.now())
 
   const viewingToday = isSameLocalDay(day, new Date())
+  const addHref = viewingToday ? '/add' : `/add?d=${localDayKey(day)}`
 
   function goTo(next: Date) {
     setDay(next)
@@ -35,12 +34,6 @@ export function TodayPage() {
     const fromUrl = parseLocalDayKey(searchParams.get('d'))
     if (fromUrl && !isSameLocalDay(fromUrl, day)) setDay(fromUrl)
   }, [searchParams, day])
-
-  useEffect(() => {
-    if (!viewingToday) return
-    const id = window.setInterval(() => setNowMs(Date.now()), 30_000)
-    return () => window.clearInterval(id)
-  }, [viewingToday])
 
   useEffect(() => {
     let active = true
@@ -75,7 +68,6 @@ export function TodayPage() {
 
   const totals = sumMeals(meals)
   const firstMeal = useMemo(() => firstMealOfDay(meals, localDayKey(day)), [meals, day])
-  const now = DateTime.fromMillis(nowMs)
 
   return (
     <div className="page">
@@ -103,7 +95,7 @@ export function TodayPage() {
           lastMeal={lastMeal}
           previousMeal={previousMeal}
           firstMeal={firstMeal}
-          now={now}
+          addHref={addHref}
         />
       ) : null}
 
@@ -135,7 +127,7 @@ export function TodayPage() {
         </section>
       ) : null}
 
-      <Link className="btn linkish" to={isSameLocalDay(day, new Date()) ? '/add' : `/add?d=${localDayKey(day)}`}>
+      <Link className="btn linkish" to={addHref}>
         Add meal
       </Link>
 
