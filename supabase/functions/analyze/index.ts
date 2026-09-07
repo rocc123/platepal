@@ -89,10 +89,102 @@ function roundNutrition(value: number, calories = false) {
   return calories ? Math.round(value) : Math.round(value * 10) / 10
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function geminiErrorMessage(payload: unknown, status: number) {
+  const message =
+    payload &&
+    typeof payload === 'object' &&
+    'error' in payload &&
+    payload.error &&
+    typeof payload.error === 'object' &&
+    'message' in payload.error
+      ? String((payload.error as { message?: unknown }).message ?? '')
+      : ''
+  return message || `Gemini request failed (${status})`
+}
+
+function extractGeminiText(payload: unknown) {
+  const row = payload as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string; thought?: boolean }> } }>
+  }
+  return (row.candidates?.[0]?.content?.parts ?? [])
+    .filter((part) => !part.thought)
+    .map((part) => part.text ?? '')
+    .join('')
+}
+
+async function generateNutrition(geminiKey: string, model: string, parts: Array<Record<string, unknown>>) {
+  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
+  const request = {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': geminiKey,
+    },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents: [{ role: 'user', parts }],
+      generationConfig: { responseMimeType: 'application/json' },
+    }),
+  }
+
+  let lastError = 'Could not reach Gemini'
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const geminiRes = await fetch(geminiUrl, request)
+      let geminiJson: unknown
+      try {
+        geminiJson = await geminiRes.json()
+      } catch {
+        lastError = `Gemini returned non-JSON (${geminiRes.status})`
+        console.error(`analyze gemini attempt ${attempt}:`, lastError)
+        if (attempt < 2) await sleep(400)
+        continue
+      }
+
+      if (!geminiRes.ok) {
+        lastError = geminiErrorMessage(geminiJson, geminiRes.status)
+        console.error(`analyze gemini attempt ${attempt}:`, lastError)
+        if (attempt < 2) await sleep(400)
+        continue
+      }
+
+      return JSON.parse(stripFences(extractGeminiText(geminiJson))) as {
+        items?: Array<Record<string, unknown>>
+        totals?: Record<string, unknown>
+        confidence?: number
+        assumptions?: string
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : 'Could not reach Gemini'
+      if (lastError === 'Unexpected end of JSON input' || lastError.startsWith('JSON')) {
+        lastError = 'Gemini returned invalid JSON'
+      }
+      console.error(`analyze gemini attempt ${attempt}:`, lastError)
+      if (attempt < 2) await sleep(400)
+    }
+  }
+
+  throw new Error(lastError)
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 400)
 
+  try {
+    return await handleAnalyze(req)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Analyze failed'
+    console.error('analyze failed:', message)
+    return json({ error: message }, 500)
+  }
+})
+
+async function handleAnalyze(req: Request) {
   const authHeader = req.headers.get('Authorization')
   if (!authHeader) return json({ error: 'Missing authorization' }, 401)
 
@@ -145,39 +237,7 @@ Deno.serve(async (req) => {
     })
   }
 
-  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`
-  let geminiRes: Response
-  try {
-    geminiRes = await fetch(geminiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents: [{ role: 'user', parts }],
-        generationConfig: { responseMimeType: 'application/json' },
-      }),
-    })
-  } catch {
-    return json({ error: 'Could not reach Gemini' }, 500)
-  }
-
-  const geminiJson = await geminiRes.json()
-  if (!geminiRes.ok) {
-    return json({ error: 'Gemini request failed' }, 500)
-  }
-
-  const text = geminiJson?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? '').join('') ?? ''
-  let parsed: {
-    items?: Array<Record<string, unknown>>
-    totals?: Record<string, unknown>
-    confidence?: number
-    assumptions?: string
-  }
-  try {
-    parsed = JSON.parse(stripFences(text))
-  } catch {
-    return json({ error: 'Gemini returned invalid JSON' }, 500)
-  }
+  const parsed = await generateNutrition(geminiKey, model, parts)
 
   const items = (parsed.items ?? []).map((item) => ({
     name: String(item.name ?? ''),
@@ -213,4 +273,4 @@ Deno.serve(async (req) => {
     confidence: Math.min(1, Math.max(0, Number(parsed.confidence ?? 0))),
     assumptions: String(parsed.assumptions ?? ''),
   })
-})
+}

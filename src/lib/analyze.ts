@@ -131,6 +131,12 @@ export async function analyzeMeal(request: AnalyzeRequest): Promise<AnalyzeResul
   if (usingLocalData) return localEstimate(request)
 
   const { data, error } = await getSupabase().functions.invoke('analyze', { body: request })
-  if (error) throw new Error(error.message)
+  if (error) {
+    const fromBody =
+      data && typeof data === 'object' && 'error' in data && typeof (data as { error?: unknown }).error === 'string'
+        ? (data as { error: string }).error
+        : null
+    throw new Error(fromBody || error.message)
+  }
   return asAnalyzeResult(data)
 }
