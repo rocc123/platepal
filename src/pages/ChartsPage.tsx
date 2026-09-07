@@ -2,8 +2,9 @@ import { DateTime } from 'luxon'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useUser } from '../components/AuthGate'
+import { FastingChart } from '../components/FastingChart'
 import { addDays, localDayKey, mealDayKey, startOfLocalDay, startOfNextLocalDay, weekdayShort } from '../lib/dates'
-import { firstMealOfDay, lastMealBefore, overnightFastMinutes } from '../lib/fasting'
+import { firstMealOfDay, lastMealBefore, overnightFast } from '../lib/fasting'
 import { ensureProfile, fetchMealsForRange } from '../lib/supabase'
 import { sumMeals } from '../lib/totals'
 import type { Meal, Profile } from '../lib/types'
@@ -16,7 +17,12 @@ type DayPoint = {
   protein: number
   fiber: number
   calories: number
+  carbs: number
+  fat: number
   fastingMinutes: number | null
+  fastStart: DateTime | null
+  fastEnd: DateTime | null
+  inProgress: boolean
 }
 
 function buildDays(range: RangeDays, meals: Meal[], now: DateTime<boolean> = DateTime.local()): DayPoint[] {
@@ -39,14 +45,19 @@ function buildDays(range: RangeDays, meals: Meal[], now: DateTime<boolean> = Dat
     const first = firstMealOfDay(meals, key)
     const isToday = key === todayKey
     const previous = lastMealBefore(meals, first?.eaten_at ?? (isToday ? now.toUTC().toISO() ?? '' : ''))
-    const overnight = overnightFastMinutes(previous, first, isToday && !first ? now : undefined)
+    const overnight = overnightFast(previous, first, isToday && !first ? now : undefined)
     points.push({
       key,
       date,
       protein: totals.protein_g,
       fiber: totals.fiber_g,
       calories: totals.calories,
-      fastingMinutes: overnight,
+      carbs: totals.carbs_g,
+      fat: totals.fat_g,
+      fastingMinutes: overnight?.minutes ?? null,
+      fastStart: overnight?.start ?? null,
+      fastEnd: overnight?.end ?? null,
+      inProgress: Boolean(isToday && overnight && !first),
     })
   }
   return points
@@ -64,16 +75,16 @@ function Chart({
   unit: string
   points: DayPoint[]
   goal?: number
-  variant: 'protein' | 'fiber' | 'calories' | 'fasting'
+  variant: 'protein' | 'fiber' | 'calories' | 'carbs' | 'fat'
   valueOf: (point: DayPoint) => number | null
 }) {
   const values = points.map(valueOf)
-  const max = Math.max(goal ?? 0, variant === 'fasting' ? 16 : 0, ...values.map((value) => value ?? 0), 1)
+  const max = Math.max(goal ?? 0, ...values.map((value) => value ?? 0), 1)
   return (
     <section className="card chart-card">
       <div className="goal-head">
         <span className={`goal-label ${variant}`}>{label}</span>
-        <span className="muted">{goal != null ? `Goal ${goal}${unit}` : 'Overnight'}</span>
+        <span className="muted">{goal != null ? `Goal ${goal}${unit}` : ''}</span>
       </div>
       <div className="chart" style={{ gridTemplateColumns: `repeat(${points.length}, minmax(0, 1fr))` }}>
         {points.map((point, index) => {
@@ -131,7 +142,9 @@ export function ChartsPage() {
   }, [user, range])
 
   const points = useMemo(() => buildDays(range, meals), [range, meals])
-  const daysLogged = points.filter((p) => p.protein > 0 || p.fiber > 0 || p.calories > 0).length
+  const daysLogged = points.filter(
+    (p) => p.protein > 0 || p.fiber > 0 || p.calories > 0 || p.carbs > 0 || p.fat > 0,
+  ).length
   const proteinHits = profile ? points.filter((p) => p.protein >= profile.protein_goal_g).length : 0
   const fiberHits = profile ? points.filter((p) => p.fiber >= profile.fiber_goal_g).length : 0
   const fastingDays = points.filter((p) => p.fastingMinutes != null).length
@@ -196,12 +209,20 @@ export function ChartsPage() {
             />
           ) : null}
           <Chart
-            label="Fasting"
-            unit="h"
+            label="Carbs"
+            unit="g"
             points={points}
-            variant="fasting"
-            valueOf={(point) => (point.fastingMinutes == null ? null : point.fastingMinutes / 60)}
+            variant="carbs"
+            valueOf={(point) => point.carbs}
           />
+          <Chart
+            label="Fat"
+            unit="g"
+            points={points}
+            variant="fat"
+            valueOf={(point) => point.fat}
+          />
+          <FastingChart points={points} />
         </>
       ) : null}
     </div>

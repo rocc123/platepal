@@ -47,7 +47,7 @@ export function SavedMealPicker({
                 <button type="button" className="hit saved-hit" onClick={() => onPick(meal)}>
                   <strong>{meal.name}</strong>
                   <span>
-                    {meal.protein_g}g protein · {meal.fiber_g}g fiber
+                    {meal.protein_g}g protein · {meal.fiber_g}g fiber · {meal.carbs_g}g carbs · {meal.fat_g}g fat
                     {extra.length ? ` · ${extra.join(', ')}` : ''}
                   </span>
                 </button>

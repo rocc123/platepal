@@ -6,6 +6,7 @@ import { DEFAULT_MEAL_DURATION_MINUTES } from '../lib/fasting'
 import { sourceIdByCode } from '../lib/lookups'
 import { filterSavedMeals, itemsFromSavedMeal } from '../lib/savedMeals'
 import { createMeal, deleteSavedMeal, fetchSavedMeals, renameSavedMeal } from '../lib/supabase'
+import { formatFocusLine, formatOtherLine } from '../lib/totals'
 import type { SavedMeal } from '../lib/types'
 
 export function SavedMealsPage() {
@@ -147,7 +148,9 @@ export function SavedMealsPage() {
                   <button type="button" className="saved-main" onClick={() => cloneMeal(meal)} disabled={busyId === meal.id}>
                     <strong>{meal.name}</strong>
                     <span className="muted">
-                      {meal.protein_g}g protein · {meal.fiber_g}g fiber
+                      {formatFocusLine(meal.protein_g, meal.fiber_g)}
+                      <br />
+                      {formatOtherLine(meal.calories, meal.carbs_g, meal.fat_g)}
                     </span>
                   </button>
                   <div className="row-actions two">

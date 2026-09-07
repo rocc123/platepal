@@ -3,7 +3,7 @@ import { FoodSearch } from './FoodSearch'
 import { MealWhen } from './MealWhen'
 import { scaleFrom100g } from '../lib/foods'
 import type { Lookups } from '../lib/lookups'
-import { sumItems } from '../lib/totals'
+import { formatFocusLine, formatOtherLine, sumItems } from '../lib/totals'
 import type { MealItem } from '../lib/types'
 
 type MealEditorProps = {
@@ -276,10 +276,8 @@ export function MealEditor({
       )}
 
       <div className="totals-line">
-        <span>
-          {totals.protein_g}g protein · {totals.fiber_g}g fiber
-        </span>
-        <span>{totals.calories} cal</span>
+        <span>{formatFocusLine(totals.protein_g, totals.fiber_g)}</span>
+        <span>{formatOtherLine(totals.calories, totals.carbs_g, totals.fat_g)}</span>
       </div>
 
       {showSavedMealCheckbox ? (
