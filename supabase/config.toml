@@ -23,5 +23,9 @@ enable_signup = true
 enable_signup = true
 enable_confirmations = false
 
+[auth.email.template.magic_link]
+subject = "Your Plate Pal sign-in code"
+content_path = "./supabase/templates/magic_link.html"
+
 [functions.analyze]
 verify_jwt = true
