@@ -1,7 +1,9 @@
+import { DateTime } from 'luxon'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useUser } from '../components/AuthGate'
 import { addDays, localDayKey, mealDayKey, startOfLocalDay, startOfNextLocalDay, weekdayShort } from '../lib/dates'
+import { firstMealOfDay, lastMealBefore, overnightFastMinutes } from '../lib/fasting'
 import { ensureProfile, fetchMealsForRange } from '../lib/supabase'
 import { sumMeals } from '../lib/totals'
 import type { Meal, Profile } from '../lib/types'
@@ -14,11 +16,13 @@ type DayPoint = {
   protein: number
   fiber: number
   calories: number
+  fastingMinutes: number | null
 }
 
-function buildDays(range: RangeDays, meals: Meal[]): DayPoint[] {
+function buildDays(range: RangeDays, meals: Meal[], now: DateTime<boolean> = DateTime.local()): DayPoint[] {
   const today = startOfLocalDay(new Date())
   const start = addDays(today, -(range - 1))
+  const todayKey = localDayKey(today)
   const byDay = new Map<string, Meal[]>()
   for (const meal of meals) {
     const key = mealDayKey(meal.eaten_at, meal.tz_name)
@@ -30,13 +34,19 @@ function buildDays(range: RangeDays, meals: Meal[]): DayPoint[] {
   for (let i = 0; i < range; i += 1) {
     const date = addDays(start, i)
     const key = localDayKey(date)
-    const totals = sumMeals(byDay.get(key) ?? [])
+    const dayMeals = byDay.get(key) ?? []
+    const totals = sumMeals(dayMeals)
+    const first = firstMealOfDay(meals, key)
+    const isToday = key === todayKey
+    const previous = lastMealBefore(meals, first?.eaten_at ?? (isToday ? now.toUTC().toISO() ?? '' : ''))
+    const overnight = overnightFastMinutes(previous, first, isToday && !first ? now : undefined)
     points.push({
       key,
       date,
       protein: totals.protein_g,
       fiber: totals.fiber_g,
       calories: totals.calories,
+      fastingMinutes: overnight,
     })
   }
   return points
@@ -48,36 +58,37 @@ function Chart({
   points,
   goal,
   variant,
+  valueOf,
 }: {
   label: string
   unit: string
   points: DayPoint[]
-  goal: number
-  variant: 'protein' | 'fiber' | 'calories'
+  goal?: number
+  variant: 'protein' | 'fiber' | 'calories' | 'fasting'
+  valueOf: (point: DayPoint) => number | null
 }) {
-  const max = Math.max(goal, ...points.map((p) => (variant === 'protein' ? p.protein : variant === 'fiber' ? p.fiber : p.calories)), 1)
+  const values = points.map(valueOf)
+  const max = Math.max(goal ?? 0, variant === 'fasting' ? 16 : 0, ...values.map((value) => value ?? 0), 1)
   return (
     <section className="card chart-card">
       <div className="goal-head">
         <span className={`goal-label ${variant}`}>{label}</span>
-        <span className="muted">
-          Goal {goal}
-          {unit}
-        </span>
+        <span className="muted">{goal != null ? `Goal ${goal}${unit}` : 'Overnight'}</span>
       </div>
       <div className="chart" style={{ gridTemplateColumns: `repeat(${points.length}, minmax(0, 1fr))` }}>
-        {points.map((point) => {
-          const value = variant === 'protein' ? point.protein : variant === 'fiber' ? point.fiber : point.calories
-          const height = Math.min(100, (value / max) * 100)
-          const goalLine = Math.min(100, (goal / max) * 100)
+        {points.map((point, index) => {
+          const value = values[index]
+          const height = value == null ? 0 : Math.min(100, (value / max) * 100)
+          const goalLine = goal != null ? Math.min(100, (goal / max) * 100) : null
+          const title = value == null ? `${label} —` : `${label} ${Math.round(value)}${unit}`
           return (
-            <Link key={point.key} className="chart-col" to={`/?d=${point.key}`} title={`${label} ${value}${unit}`}>
+            <Link key={point.key} className="chart-col" to={`/?d=${point.key}`} title={title}>
               <div className="chart-track">
-                <div className="chart-goal-line" style={{ bottom: `${goalLine}%` }} />
+                {goalLine != null ? <div className="chart-goal-line" style={{ bottom: `${goalLine}%` }} /> : null}
                 <div className={`chart-fill ${variant}`} style={{ height: `${height}%` }} />
               </div>
               <span>{weekdayShort(point.date)}</span>
-              <span className="chart-num">{Math.round(value)}</span>
+              <span className="chart-num">{value == null ? '–' : Math.round(value)}</span>
             </Link>
           )
         })}
@@ -97,9 +108,10 @@ export function ChartsPage() {
   useEffect(() => {
     let active = true
     const start = startOfLocalDay(addDays(new Date(), -(range - 1)))
+    const lookback = addDays(start, -7)
     const end = startOfNextLocalDay(new Date())
     setLoading(true)
-    Promise.all([ensureProfile(user), fetchMealsForRange(user.id, start, end)])
+    Promise.all([ensureProfile(user), fetchMealsForRange(user.id, lookback, end)])
       .then(([nextProfile, nextMeals]) => {
         if (!active) return
         setProfile(nextProfile)
@@ -122,6 +134,11 @@ export function ChartsPage() {
   const daysLogged = points.filter((p) => p.protein > 0 || p.fiber > 0 || p.calories > 0).length
   const proteinHits = profile ? points.filter((p) => p.protein >= profile.protein_goal_g).length : 0
   const fiberHits = profile ? points.filter((p) => p.fiber >= profile.fiber_goal_g).length : 0
+  const fastingDays = points.filter((p) => p.fastingMinutes != null).length
+  const fastingAvg =
+    fastingDays === 0
+      ? null
+      : Math.round(points.reduce((sum, p) => sum + (p.fastingMinutes ?? 0), 0) / fastingDays / 60)
 
   return (
     <div className="page">
@@ -150,6 +167,7 @@ export function ChartsPage() {
         <>
           <p className="lede">
             {proteinHits}/{range} days hit protein · {fiberHits}/{range} days hit fiber
+            {fastingAvg != null ? ` · ${fastingAvg}h avg overnight fast` : ''}
           </p>
           <Chart
             label="Protein"
@@ -157,8 +175,16 @@ export function ChartsPage() {
             points={points}
             goal={profile.protein_goal_g}
             variant="protein"
+            valueOf={(point) => point.protein}
           />
-          <Chart label="Fiber" unit="g" points={points} goal={profile.fiber_goal_g} variant="fiber" />
+          <Chart
+            label="Fiber"
+            unit="g"
+            points={points}
+            goal={profile.fiber_goal_g}
+            variant="fiber"
+            valueOf={(point) => point.fiber}
+          />
           {profile.calorie_goal ? (
             <Chart
               label="Calories"
@@ -166,8 +192,16 @@ export function ChartsPage() {
               points={points}
               goal={profile.calorie_goal}
               variant="calories"
+              valueOf={(point) => point.calories}
             />
           ) : null}
+          <Chart
+            label="Fasting"
+            unit="h"
+            points={points}
+            variant="fasting"
+            valueOf={(point) => (point.fastingMinutes == null ? null : point.fastingMinutes / 60)}
+          />
         </>
       ) : null}
     </div>

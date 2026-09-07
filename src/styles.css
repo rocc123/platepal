@@ -146,6 +146,10 @@ a {
   color: var(--fiber);
 }
 
+.goal-label.fasting {
+  color: var(--ink);
+}
+
 .goal.calories .goal-label,
 .goal.calories .goal-value,
 .cal-plain {
@@ -569,6 +573,10 @@ textarea {
   gap: 10px;
 }
 
+.when-grid .field:nth-child(3) {
+  grid-column: 1 / 2;
+}
+
 .last-ate {
   display: grid;
   gap: 2px;
@@ -650,6 +658,10 @@ textarea {
 
 .chart-fill.calories {
   background: #7d8b97;
+}
+
+.chart-fill.fasting {
+  background: var(--ink);
 }
 
 .chart-goal-line {

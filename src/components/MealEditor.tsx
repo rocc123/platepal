@@ -10,6 +10,7 @@ type MealEditorProps = {
   items: MealItem[]
   date: string
   time: string
+  durationMinutes: number
   periodId: number
   lookups: Lookups
   confidence: number | null
@@ -22,6 +23,7 @@ type MealEditorProps = {
   onItemsChange: (items: MealItem[]) => void
   onDateChange: (date: string) => void
   onTimeChange: (time: string) => void
+  onDurationChange: (minutes: number) => void
   onPeriodChange: (periodId: number) => void
   onSaveAsTemplateChange: (checked: boolean) => void
   onSave: () => void
@@ -58,6 +60,7 @@ export function MealEditor({
   items,
   date,
   time,
+  durationMinutes,
   periodId,
   lookups,
   confidence,
@@ -70,6 +73,7 @@ export function MealEditor({
   onItemsChange,
   onDateChange,
   onTimeChange,
+  onDurationChange,
   onPeriodChange,
   onSaveAsTemplateChange,
   onSave,
@@ -97,10 +101,12 @@ export function MealEditor({
       <MealWhen
         date={date}
         time={time}
+        durationMinutes={durationMinutes}
         periodId={periodId}
         lookups={lookups}
         onDateChange={onDateChange}
         onTimeChange={onTimeChange}
+        onDurationChange={onDurationChange}
         onPeriodChange={onPeriodChange}
       />
       <label className="field">

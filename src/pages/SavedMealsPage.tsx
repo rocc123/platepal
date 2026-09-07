@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useUser } from '../components/AuthGate'
 import { inferPeriodFromWhen, nowLocal, zoneStamp } from '../lib/dates'
+import { DEFAULT_MEAL_DURATION_MINUTES } from '../lib/fasting'
 import { sourceIdByCode } from '../lib/lookups'
 import { createMeal, deleteSavedMeal, fetchSavedMeals, renameSavedMeal } from '../lib/supabase'
 import type { MealItem, SavedMeal } from '../lib/types'
@@ -48,6 +49,7 @@ export function SavedMealsPage() {
         note: saved.note || saved.name,
         source_id: sourceIdByCode('saved'),
         meal_period_id: inferPeriodFromWhen(when),
+        duration_minutes: DEFAULT_MEAL_DURATION_MINUTES,
         ...zoneStamp(when),
         calories: saved.calories,
         protein_g: saved.protein_g,
