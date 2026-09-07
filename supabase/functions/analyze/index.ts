@@ -107,7 +107,17 @@ Deno.serve(async (req) => {
   if (userError || !userData.user) return json({ error: 'Invalid session' }, 401)
 
   const { data: profile } = await supabase.from('profiles').select('id').eq('id', userData.user.id).maybeSingle()
-  if (!profile) return json({ error: 'Profile required' }, 401)
+  if (!profile) {
+    const displayName = userData.user.email?.split('@')[0] || 'You'
+    const { error: insertError } = await supabase.from('profiles').insert({
+      id: userData.user.id,
+      display_name: displayName,
+    })
+    if (insertError) {
+      const retry = await supabase.from('profiles').select('id').eq('id', userData.user.id).maybeSingle()
+      if (!retry.data) return json({ error: 'Profile required' }, 401)
+    }
+  }
 
   let body: AnalyzeRequest
   try {
@@ -121,7 +131,7 @@ Deno.serve(async (req) => {
   if (!note && !imageBase64) return json({ error: 'Add a photo or a short note first.' }, 400)
 
   const geminiKey = Deno.env.get('GEMINI_API_KEY')
-  const model = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash'
+  const model = Deno.env.get('GEMINI_MODEL') || 'gemini-3.8-flash'
   if (!geminiKey) return json({ error: 'GEMINI_API_KEY is not set' }, 500)
 
   const parts: Array<Record<string, unknown>> = []

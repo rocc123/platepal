@@ -78,10 +78,10 @@ Edge Function secrets (Supabase dashboard / `supabase secrets set`):
 
 ```
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.8-flash
 ```
 
-Use whatever current Gemini Flash model ID is available in AI Studio if `gemini-2.5-flash` is renamed. Prefer the cheapest Flash-class vision model.
+Use whatever current Gemini Flash model ID is available in AI Studio if `gemini-3.8-flash` is renamed. Prefer the cheapest Flash-class vision model.
 
 ---
 

@@ -38,7 +38,7 @@ VITE_SUPABASE_ANON_KEY=
 ```
 supabase functions deploy analyze
 supabase secrets set GEMINI_API_KEY=...
-supabase secrets set GEMINI_MODEL=gemini-2.5-flash
+supabase secrets set GEMINI_MODEL=gemini-3.8-flash
 ```
 
 The Gemini key never ships to the browser. Photos are resized on the device and are not stored.
@@ -85,7 +85,7 @@ npx supabase login
 npx supabase link --project-ref your-project-ref
 npx supabase functions deploy analyze
 npx supabase secrets set GEMINI_API_KEY=your-gemini-key
-npx supabase secrets set GEMINI_MODEL=gemini-2.5-flash
+npx supabase secrets set GEMINI_MODEL=gemini-3.8-flash
 ```
 
 The project ref is in **Project Settings → General**.

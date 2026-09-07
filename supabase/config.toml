@@ -1,6 +1,6 @@
 # Used by `supabase link`, `db push`, and `functions deploy`.
 # https://supabase.com/docs/guides/local-development/cli/config
-project_id = "plate-pal"
+project_id = "wwotgbztfqcqmtwcsedw"
 
 [api]
 enabled = true
