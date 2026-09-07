@@ -32,7 +32,7 @@ VITE_SUPABASE_ANON_KEY=
 ```
 
 2. In the Supabase project, run `supabase/migrations/0001_init.sql`, then `0002_lookups_and_timezone.sql`, then `0003_meal_duration.sql`.
-3. Turn on email magic link. Google OAuth is optional. Add the Vite origin and the production host to Site URL + Redirect URLs.
+3. Turn on email OTP / magic link. Add `{{ .Token }}` to the Magic Link email template. Google OAuth is optional. Add the Vite origin, `/login`, and the production host to Site URL + Redirect URLs.
 4. Deploy the `analyze` Edge Function and set secrets:
 
 ```
@@ -72,9 +72,10 @@ Or do it from an existing clone:
 3. Marketplace syncs `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. The Vite build maps those onto the client automatically. Redeploy after the database is connected — Vite bakes public keys in at **build** time.
 4. Open **Supabase Studio** from the Vercel Storage page. In the SQL Editor, run `supabase/migrations/0001_init.sql`, then `0002_lookups_and_timezone.sql`, then `0003_meal_duration.sql`.
 5. **Authentication → Providers → Email**: leave magic link / OTP on.
-6. **Authentication → URL Configuration**:
+6. **Authentication → Email Templates → Magic Link**: include `{{ .Token }}` so the home screen app can sign in with the 6-digit code. Email links open in the browser and will not sign the installed PWA in.
+7. **Authentication → URL Configuration**:
    - Site URL: `https://your-app.vercel.app`
-   - Redirect URLs: that origin plus `http://127.0.0.1:4521` for local.
+   - Redirect URLs: that origin, `https://your-app.vercel.app/login`, plus `http://127.0.0.1:4521` and `http://127.0.0.1:4521/login` for local.
 
 ### Analyze function (optional until login works)
 
@@ -100,7 +101,7 @@ Netlify works too: same `dist` output, and `public/_redirects` is already in the
 
 ## What is in v1
 
-- Sign in (magic link, optional Google, or local email)
+- Sign in (email code, optional Google, or local email)
 - Today: protein bar, fiber bar, current fast, meals for the local calendar day
 - Add / edit / delete meals, with a 15-minute eating duration so fasting starts when the meal ends
 - Analyze a photo or note (or enter a meal by hand)

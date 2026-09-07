@@ -1,4 +1,4 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { createClient, type EmailOtpType, type SupabaseClient } from '@supabase/supabase-js'
 import { fromUtc, startOfLocalDay, startOfNextLocalDay, zoneStamp } from './dates'
 import { resolveSupabaseBrowserEnv } from './env'
 import { parseDurationMinutes } from './fasting'
@@ -13,6 +13,17 @@ export const usingLocalData = !supabaseUrl || !supabaseAnonKey
 
 const AUTH_KEY = 'plate-pal-auth'
 const DB_KEY = 'plate-pal-db'
+const OTP_EMAIL_KEY = 'plate-pal-otp-email'
+
+const AUTH_CALLBACK_KEYS = ['code', 'token_hash', 'access_token', 'error', 'error_description', 'error_code']
+const EMAIL_OTP_TYPES = new Set<EmailOtpType>([
+  'email',
+  'magiclink',
+  'signup',
+  'recovery',
+  'invite',
+  'email_change',
+])
 
 type LocalDb = {
   profiles: Profile[]
@@ -197,10 +208,119 @@ export async function signInWithMagicLink(email: string): Promise<{ error?: stri
 
   const { error } = await getSupabase().auth.signInWithOtp({
     email: trimmed,
-    options: { emailRedirectTo: window.location.origin },
+    options: { emailRedirectTo: authRedirectTo(), shouldCreateUser: true },
   })
   if (error) return { error: error.message }
+  rememberOtpEmail(trimmed)
   return {}
+}
+
+export async function verifyEmailCode(email: string, token: string): Promise<{ error?: string }> {
+  const trimmedEmail = email.trim().toLowerCase()
+  const trimmedToken = token.replace(/\s+/g, '')
+  if (!trimmedEmail || !trimmedEmail.includes('@')) return { error: 'Enter a valid email address.' }
+  if (!trimmedToken) return { error: 'Enter the code from your email.' }
+
+  if (usingLocalData) {
+    const result = await signInWithMagicLink(trimmedEmail)
+    return result.error ? { error: result.error } : {}
+  }
+
+  const { error } = await getSupabase().auth.verifyOtp({
+    email: trimmedEmail,
+    token: trimmedToken,
+    type: 'email',
+  })
+  if (error) return { error: error.message }
+  clearOtpEmail()
+  return {}
+}
+
+export function rememberOtpEmail(email: string) {
+  sessionStorage.setItem(OTP_EMAIL_KEY, email)
+}
+
+export function readOtpEmail(): string | null {
+  try {
+    return sessionStorage.getItem(OTP_EMAIL_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function clearOtpEmail() {
+  sessionStorage.removeItem(OTP_EMAIL_KEY)
+}
+
+export function authRedirectTo() {
+  return `${window.location.origin}/login`
+}
+
+export function hasAuthCallbackParams(href = window.location.href): boolean {
+  const url = new URL(href)
+  const hash = new URLSearchParams(url.hash.replace(/^#/, ''))
+  return AUTH_CALLBACK_KEYS.some((key) => url.searchParams.has(key) || hash.has(key))
+}
+
+export async function completeEmailAuthFromUrl(): Promise<{ error?: string; user?: SessionUser | null }> {
+  if (usingLocalData) return { user: readLocalUser() }
+
+  const supabase = getSupabase()
+  const url = new URL(window.location.href)
+  const hash = new URLSearchParams(url.hash.replace(/^#/, ''))
+  const tokenHash = url.searchParams.get('token_hash') ?? hash.get('token_hash')
+  const rawType = url.searchParams.get('type') ?? hash.get('type')
+  const type = rawType && EMAIL_OTP_TYPES.has(rawType as EmailOtpType) ? (rawType as EmailOtpType) : 'email'
+  const errorDescription =
+    url.searchParams.get('error_description') ??
+    url.searchParams.get('error') ??
+    hash.get('error_description') ??
+    hash.get('error')
+
+  if (tokenHash) {
+    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type })
+    clearAuthParamsFromUrl()
+    if (error) return { error: friendlyAuthError(error.message), user: null }
+    clearOtpEmail()
+    return { user: await getCurrentUser() }
+  }
+
+  const { data, error } = await supabase.auth.getSession()
+  const hadCallback = hasAuthCallbackParams()
+  if (hadCallback) clearAuthParamsFromUrl()
+
+  if (errorDescription) {
+    return { error: friendlyAuthError(decodeURIComponent(errorDescription.replace(/\+/g, ' '))), user: null }
+  }
+  if (error) return { error: friendlyAuthError(error.message), user: null }
+  if (data.session?.user) {
+    clearOtpEmail()
+    return { user: toUser(data.session.user.id, data.session.user.email ?? null) }
+  }
+  if (hadCallback) {
+    return {
+      error:
+        'That email link could not sign this app in. Home screen apps open links in the browser, so enter the code from the email here instead.',
+      user: null,
+    }
+  }
+  return { user: await getCurrentUser() }
+}
+
+function friendlyAuthError(message: string) {
+  const lower = message.toLowerCase()
+  if (lower.includes('pkce') || lower.includes('code verifier') || lower.includes('verifier')) {
+    return 'That email link opened in a different browser than the app. Enter the code from the email here instead.'
+  }
+  return message
+}
+
+function clearAuthParamsFromUrl() {
+  const url = new URL(window.location.href)
+  for (const key of AUTH_CALLBACK_KEYS) url.searchParams.delete(key)
+  url.searchParams.delete('type')
+  url.hash = ''
+  window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}`)
 }
 
 export async function signInWithGoogle(): Promise<{ error?: string }> {
@@ -209,7 +329,7 @@ export async function signInWithGoogle(): Promise<{ error?: string }> {
   }
   const { error } = await getSupabase().auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: window.location.origin },
+    options: { redirectTo: authRedirectTo() },
   })
   if (error) return { error: error.message }
   return {}

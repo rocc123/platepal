@@ -1,21 +1,57 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
-import { getCurrentUser, signInWithGoogle, signInWithMagicLink, usingLocalData } from '../lib/supabase'
+import { useLocation, useNavigate } from 'react-router-dom'
+import {
+  clearOtpEmail,
+  completeEmailAuthFromUrl,
+  onAuthChange,
+  readOtpEmail,
+  signInWithGoogle,
+  signInWithMagicLink,
+  usingLocalData,
+  verifyEmailCode,
+} from '../lib/supabase'
 
 export function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [email, setEmail] = useState('')
+  const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sent, setSent] = useState(false)
   const [userReady, setUserReady] = useState<boolean | null>(null)
 
   useEffect(() => {
-    getCurrentUser().then((user) => {
-      setUserReady(Boolean(user))
-      if (user) navigate('/', { replace: true })
+    let active = true
+    const pending = readOtpEmail()
+    if (pending) {
+      setEmail(pending)
+      setSent(true)
+    }
+    const fromGate = (location.state as { authError?: string } | null)?.authError
+    if (fromGate) setError(fromGate)
+
+    void completeEmailAuthFromUrl().then((result) => {
+      if (!active) return
+      if (result.user) {
+        clearOtpEmail()
+        navigate('/', { replace: true })
+        return
+      }
+      if (result.error) setError(result.error)
+      setUserReady(false)
     })
-  }, [navigate])
+
+    const unsubscribe = onAuthChange((user) => {
+      if (!active || !user) return
+      clearOtpEmail()
+      navigate('/', { replace: true })
+    })
+    return () => {
+      active = false
+      unsubscribe()
+    }
+  }, [navigate, location.state])
 
   if (userReady === null) {
     return (
@@ -24,10 +60,8 @@ export function LoginPage() {
       </div>
     )
   }
-  if (userReady) return <Navigate to="/" replace />
 
-  async function onEmail(event: FormEvent) {
-    event.preventDefault()
+  async function sendEmail() {
     setBusy(true)
     setError(null)
     const result = await signInWithMagicLink(email)
@@ -43,12 +77,37 @@ export function LoginPage() {
     setSent(true)
   }
 
+  async function onEmail(event: FormEvent) {
+    event.preventDefault()
+    await sendEmail()
+  }
+
+  async function onCode(event: FormEvent) {
+    event.preventDefault()
+    setBusy(true)
+    setError(null)
+    const result = await verifyEmailCode(email, code)
+    setBusy(false)
+    if (result.error) {
+      setError(result.error)
+      return
+    }
+    navigate('/', { replace: true })
+  }
+
   async function onGoogle() {
     setBusy(true)
     setError(null)
     const result = await signInWithGoogle()
     setBusy(false)
     if (result.error) setError(result.error)
+  }
+
+  function useDifferentEmail() {
+    clearOtpEmail()
+    setSent(false)
+    setCode('')
+    setError(null)
   }
 
   return (
@@ -71,8 +130,38 @@ export function LoginPage() {
           </p>
         ) : null}
 
-        {sent ? (
-          <p className="status">Check your email for a sign-in link.</p>
+        {sent && !usingLocalData ? (
+          <form className="card page" onSubmit={onCode}>
+            <p className="status">
+              We emailed a sign-in code to <strong>{email}</strong>. Enter it here. If you added
+              Plate Pal to your home screen, skip the email link — it opens in the browser and
+              cannot sign this app in.
+            </p>
+            <label className="field">
+              <span>Code</span>
+              <input
+                className="otp-input"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                autoFocus
+                value={code}
+                onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 8))}
+                placeholder="123456"
+                required
+              />
+            </label>
+            <button className="btn" type="submit" disabled={busy || code.length < 6}>
+              Sign in
+            </button>
+            <button className="btn-secondary" type="button" disabled={busy} onClick={() => void sendEmail()}>
+              Resend code
+            </button>
+            <button className="btn-secondary" type="button" disabled={busy} onClick={useDifferentEmail}>
+              Use a different email
+            </button>
+            {error ? <p className="error">{error}</p> : null}
+          </form>
         ) : (
           <form className="card page" onSubmit={onEmail}>
             <label className="field">
@@ -87,7 +176,7 @@ export function LoginPage() {
               />
             </label>
             <button className="btn" type="submit" disabled={busy}>
-              {usingLocalData ? 'Continue' : 'Email me a link'}
+              {usingLocalData ? 'Continue' : 'Email me a code'}
             </button>
             {!usingLocalData ? (
               <button className="btn-secondary" type="button" disabled={busy} onClick={onGoogle}>
