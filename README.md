@@ -31,7 +31,7 @@ VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
 ```
 
-2. In the Supabase project, run `supabase/migrations/0001_init.sql`, then `0002_lookups_and_timezone.sql`.
+2. In the Supabase project, run `supabase/migrations/0001_init.sql`, then `0002_lookups_and_timezone.sql`, then `0003_meal_duration.sql`.
 3. Turn on email magic link. Google OAuth is optional. Add the Vite origin and the production host to Site URL + Redirect URLs.
 4. Deploy the `analyze` Edge Function and set secrets:
 
@@ -103,14 +103,14 @@ Netlify works too: same `dist` output, and `public/_redirects` is already in the
 ## What is in v1
 
 - Sign in (magic link, optional Google, or local email)
-- Today: protein bar, fiber bar, meals for the local calendar day
-- Add / edit / delete meals
+- Today: protein bar, fiber bar, current fast, meals for the local calendar day
+- Add / edit / delete meals, with a 15-minute eating duration so fasting starts when the meal ends
 - Analyze a photo or note (or enter a meal by hand)
 - Saved meal templates
 - Settings for name and goals
 - Basic PWA shell (Add to Home Screen)
 - USDA food search and Open Food Facts barcodes
-- Multi-day protein/fiber charts
+- Multi-day protein/fiber charts and overnight fasting hours
 
 Food search uses the USDA FoodData Central `DEMO_KEY` unless you set `VITE_USDA_API_KEY` (free at [api.data.gov](https://api.data.gov/signup/)). Barcodes go to Open Food Facts. Neither key belongs in Supabase secrets.
 

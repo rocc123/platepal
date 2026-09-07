@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { MealEditor } from '../components/MealEditor'
 import { useUser } from '../components/AuthGate'
 import { dateTimeFromInputs, fromUtc, inferPeriodFromWhen, localDateInput, localTimeInput, zoneStamp } from '../lib/dates'
+import { DEFAULT_MEAL_DURATION_MINUTES, parseDurationMinutes } from '../lib/fasting'
 import { getLookups } from '../lib/lookups'
 import { createSavedMeal, deleteMeal, fetchMealWithItems, loadLookups, updateMeal } from '../lib/supabase'
 import { sumItems } from '../lib/totals'
@@ -22,6 +23,7 @@ export function EditMealPage() {
   const [lookups, setLookupsState] = useState(getLookups)
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
+  const [durationMinutes, setDurationMinutes] = useState(DEFAULT_MEAL_DURATION_MINUTES)
   const [periodId, setPeriodId] = useState(0)
   const [periodTouched, setPeriodTouched] = useState(false)
 
@@ -41,6 +43,7 @@ export function EditMealPage() {
         const when = fromUtc(row.meal.eaten_at, row.meal.tz_name)
         setDate(localDateInput(when))
         setTime(localTimeInput(when))
+        setDurationMinutes(parseDurationMinutes(row.meal.duration_minutes))
         setPeriodId(row.meal.meal_period_id)
       })
       .catch((err: unknown) => {
@@ -75,6 +78,7 @@ export function EditMealPage() {
         note: note.trim() || named[0].name,
         source_id: meal.source_id,
         meal_period_id: periodId,
+        duration_minutes: parseDurationMinutes(durationMinutes),
         confidence: meal.confidence,
         items: named,
         ...stamp,
@@ -148,6 +152,7 @@ export function EditMealPage() {
         items={items}
         date={date}
         time={time}
+        durationMinutes={durationMinutes}
         periodId={periodId}
         lookups={lookups}
         confidence={meal.confidence}
@@ -178,6 +183,7 @@ export function EditMealPage() {
             }
           }
         }}
+        onDurationChange={setDurationMinutes}
         onPeriodChange={(next) => {
           setPeriodId(next)
           setPeriodTouched(true)

@@ -15,6 +15,7 @@ import {
   parseLocalDayKey,
   zoneStamp,
 } from '../lib/dates'
+import { DEFAULT_MEAL_DURATION_MINUTES, parseDurationMinutes } from '../lib/fasting'
 import { getLookups, sourceIdByCode } from '../lib/lookups'
 import { createMeal, createSavedMeal, loadLookups } from '../lib/supabase'
 import { sumItems } from '../lib/totals'
@@ -49,6 +50,7 @@ export function AddMealPage() {
   const [items, setItems] = useState<MealItem[] | null>(null)
   const [date, setDate] = useState(() => localDateInput(initialWhen))
   const [time, setTime] = useState(() => localTimeInput(initialWhen))
+  const [durationMinutes, setDurationMinutes] = useState(DEFAULT_MEAL_DURATION_MINUTES)
   const [periodId, setPeriodId] = useState(() => inferPeriodFromWhen(initialWhen))
   const [periodTouched, setPeriodTouched] = useState(false)
   const [confidence, setConfidence] = useState<number | null>(null)
@@ -139,6 +141,7 @@ export function AddMealPage() {
         note: note.trim() || named[0].name,
         source_id: sourceId,
         meal_period_id: periodId,
+        duration_minutes: parseDurationMinutes(durationMinutes),
         confidence,
         items: named,
         ...stamp,
@@ -218,6 +221,7 @@ export function AddMealPage() {
         items={items}
         date={date}
         time={time}
+        durationMinutes={durationMinutes}
         periodId={periodId}
         lookups={lookups}
         confidence={confidence}
@@ -236,6 +240,7 @@ export function AddMealPage() {
           setTime(next)
           syncPeriod(date, next)
         }}
+        onDurationChange={setDurationMinutes}
         onPeriodChange={(next) => {
           setPeriodId(next)
           setPeriodTouched(true)

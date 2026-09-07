@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
+import { DateTime } from 'luxon'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { FastingCard } from '../components/FastingCard'
 import { GoalBar } from '../components/GoalBar'
 import { MealCard } from '../components/MealCard'
 import { useUser } from '../components/AuthGate'
-import { addDays, formatDayLabel, formatSince, isSameLocalDay, localDayKey, parseLocalDayKey } from '../lib/dates'
-import { getLookups, periodById } from '../lib/lookups'
-import { ensureProfile, fetchLatestMeal, fetchMealsForDay, loadLookups } from '../lib/supabase'
+import { addDays, formatDayLabel, isSameLocalDay, localDayKey, parseLocalDayKey, startOfLocalDay } from '../lib/dates'
+import { firstMealOfDay } from '../lib/fasting'
+import { ensureProfile, fetchLatestMeal, fetchLatestMealBefore, fetchMealsForDay, loadLookups } from '../lib/supabase'
 import { sumMeals } from '../lib/totals'
 import type { Meal, Profile } from '../lib/types'
 
@@ -18,6 +20,10 @@ export function TodayPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [lastMeal, setLastMeal] = useState<Meal | null>(null)
+  const [previousMeal, setPreviousMeal] = useState<Meal | null>(null)
+  const [nowMs, setNowMs] = useState(() => Date.now())
+
+  const viewingToday = isSameLocalDay(day, new Date())
 
   function goTo(next: Date) {
     setDay(next)
@@ -31,14 +37,28 @@ export function TodayPage() {
   }, [searchParams, day])
 
   useEffect(() => {
+    if (!viewingToday) return
+    const id = window.setInterval(() => setNowMs(Date.now()), 30_000)
+    return () => window.clearInterval(id)
+  }, [viewingToday])
+
+  useEffect(() => {
     let active = true
     setLoading(true)
-    Promise.all([ensureProfile(user), fetchMealsForDay(user.id, day), fetchLatestMeal(user.id), loadLookups()])
-      .then(([nextProfile, nextMeals, latest]) => {
+    const dayStartIso = startOfLocalDay(day).toISOString()
+    Promise.all([
+      ensureProfile(user),
+      fetchMealsForDay(user.id, day),
+      viewingToday ? fetchLatestMeal(user.id) : Promise.resolve(null),
+      fetchLatestMealBefore(user.id, dayStartIso),
+      loadLookups(),
+    ])
+      .then(([nextProfile, nextMeals, latest, previous]) => {
         if (!active) return
         setProfile(nextProfile)
         setMeals(nextMeals)
         setLastMeal(latest)
+        setPreviousMeal(previous)
         setError(null)
       })
       .catch((err: unknown) => {
@@ -51,9 +71,11 @@ export function TodayPage() {
     return () => {
       active = false
     }
-  }, [user, day])
+  }, [user, day, viewingToday])
 
   const totals = sumMeals(meals)
+  const firstMeal = useMemo(() => firstMealOfDay(meals, localDayKey(day)), [meals, day])
+  const now = DateTime.fromMillis(nowMs)
 
   return (
     <div className="page">
@@ -75,13 +97,14 @@ export function TodayPage() {
       {loading ? <p className="status">Loading…</p> : null}
       {error ? <p className="error">{error}</p> : null}
 
-      {!loading && lastMeal ? (
-        <section className="card last-ate">
-          <p className="last-ate-label">Last ate {formatSince(lastMeal.eaten_at, lastMeal.tz_name)}</p>
-          <p className="muted">
-            {periodById(lastMeal.meal_period_id, getLookups())?.label ?? 'Meal'}
-          </p>
-        </section>
+      {!loading ? (
+        <FastingCard
+          viewingToday={viewingToday}
+          lastMeal={lastMeal}
+          previousMeal={previousMeal}
+          firstMeal={firstMeal}
+          now={now}
+        />
       ) : null}
 
       {profile && !loading ? (
