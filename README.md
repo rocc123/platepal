@@ -111,7 +111,7 @@ Netlify works too: same `dist` output, and `public/_redirects` is already in the
 - USDA food search and Open Food Facts barcodes
 - Multi-day protein/fiber charts and overnight fasting hours
 
-Food search uses the USDA FoodData Central `DEMO_KEY` unless you set `VITE_USDA_API_KEY` (free at [api.data.gov](https://api.data.gov/signup/)). Barcodes go to Open Food Facts. Neither key belongs in Supabase secrets.
+Food search uses the USDA FoodData Central `DEMO_KEY` unless you set `VITE_USDA_API_KEY` (free at [api.data.gov](https://api.data.gov/signup/)). Barcodes go to Open Food Facts. Live scan and barcode photos work in the installed PWA (Safari and Chrome) with a JavaScript decoder; you can still type the number. Neither key belongs in Supabase secrets.
 
 ## Out of scope
 

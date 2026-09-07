@@ -401,7 +401,9 @@ export function AddMealPage() {
 
         {helper === 'barcode' ? (
           <div className="helper-panel">
-            <p className="helper-copy">Scan or type a barcode. That also skips analyze.</p>
+            <p className="helper-copy">
+              Scan with the camera, take a barcode photo, or type the number. That also skips analyze.
+            </p>
             <BarcodePicker
               onPick={(item, nextAssumptions) => {
                 setNote((current) => current.trim() || item.name)
