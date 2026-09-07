@@ -1,16 +1,23 @@
 import { DateTime } from 'luxon'
-import { fromUtc, mealDayKey } from './dates'
+import { appZone, fromUtc, mealDayKey } from './dates'
 import type { Meal } from './types'
 
 export const DEFAULT_MEAL_DURATION_MINUTES = 15
 export const MIN_MEAL_DURATION_MINUTES = 0
 export const MAX_MEAL_DURATION_MINUTES = 240
+export const DURATION_PRESETS = [15, 20, 30, 45] as const
+export const FAST_WINDOW_START_HOUR = 18
+export const FAST_WINDOW_HOURS = 18
 
 export function parseDurationMinutes(value: string | number | null | undefined): number {
   if (value == null || value === '') return DEFAULT_MEAL_DURATION_MINUTES
   const n = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(n)) return DEFAULT_MEAL_DURATION_MINUTES
   return Math.min(MAX_MEAL_DURATION_MINUTES, Math.max(MIN_MEAL_DURATION_MINUTES, Math.round(n)))
+}
+
+export function sanitizeDurationDigits(value: string): string {
+  return value.replace(/\D/g, '').slice(0, 3)
 }
 
 export function mealStartedAt(meal: Meal): DateTime {
@@ -66,16 +73,70 @@ export function currentFasting(lastMeal: Meal | null, now: DateTime<boolean> = D
   }
 }
 
+export type OvernightFast = {
+  start: DateTime
+  end: DateTime
+  minutes: number
+}
+
+export function overnightFast(
+  previous: Meal | null,
+  firstOfDay: Meal | null,
+  now?: DateTime<boolean>,
+): OvernightFast | null {
+  if (!previous) return null
+  const start = mealEndedAt(previous)
+  const end = firstOfDay ? mealStartedAt(firstOfDay) : now
+  if (!end) return null
+  return {
+    start,
+    end,
+    minutes: Math.max(0, Math.round(end.diff(start, 'minutes').minutes)),
+  }
+}
+
 export function overnightFastMinutes(
   previous: Meal | null,
   firstOfDay: Meal | null,
   now?: DateTime<boolean>,
 ): number | null {
-  if (!previous) return null
-  const start = mealEndedAt(previous)
-  const end = firstOfDay ? mealStartedAt(firstOfDay) : now
-  if (!end) return null
-  return Math.max(0, Math.round(end.diff(start, 'minutes').minutes))
+  return overnightFast(previous, firstOfDay, now)?.minutes ?? null
+}
+
+export function overnightWindow(dayKey: string, zone = appZone()) {
+  const day = DateTime.fromISO(dayKey, { zone }).startOf('day')
+  const start = day.minus({ days: 1 }).set({
+    hour: FAST_WINDOW_START_HOUR,
+    minute: 0,
+    second: 0,
+    millisecond: 0,
+  })
+  return {
+    start,
+    end: start.plus({ hours: FAST_WINDOW_HOURS }),
+  }
+}
+
+export function fastBandPlacement(
+  fastStart: DateTime,
+  fastEnd: DateTime,
+  windowStart: DateTime,
+  windowEnd: DateTime,
+): { top: number; height: number } | null {
+  const total = windowEnd.diff(windowStart, 'minutes').minutes
+  if (total <= 0) return null
+  const start = fastStart < windowStart ? windowStart : fastStart
+  const end = fastEnd > windowEnd ? windowEnd : fastEnd
+  if (end <= start) return null
+  return {
+    top: (start.diff(windowStart, 'minutes').minutes / total) * 100,
+    height: (end.diff(start, 'minutes').minutes / total) * 100,
+  }
+}
+
+export function formatFastHoursCompact(minutes: number): string {
+  const hours = Math.round((minutes / 60) * 10) / 10
+  return Number.isInteger(hours) ? String(hours) : hours.toFixed(1)
 }
 
 export function lastMealBefore(meals: Meal[], beforeIso: string): Meal | null {

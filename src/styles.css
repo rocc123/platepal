@@ -9,6 +9,8 @@
   --protein-soft: #d5ecea;
   --fiber: #3b4f8a;
   --fiber-soft: #dce3f2;
+  --fasting: #3d5278;
+  --fasting-soft: #d7deea;
   --danger: #b4232c;
   --display: "Fraunces", "Iowan Old Style", Georgia, serif;
   --sans: "Sora", "Segoe UI", Helvetica, sans-serif;
@@ -147,7 +149,7 @@ a {
 }
 
 .goal-label.fasting {
-  color: var(--ink);
+  color: var(--fasting);
 }
 
 .goal.calories .goal-label,
@@ -598,8 +600,23 @@ textarea {
   gap: 10px;
 }
 
-.when-grid .field:nth-child(3) {
-  grid-column: 1 / 2;
+.when-grid .duration-field {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+}
+
+.duration-presets {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.duration-presets .btn,
+.duration-presets .btn-secondary {
+  padding: 0 8px;
+  min-height: 40px;
+  font-size: 0.82rem;
 }
 
 .last-ate {
@@ -728,7 +745,71 @@ textarea {
 }
 
 .chart-fill.fasting {
-  background: var(--ink);
+  background: var(--fasting);
+}
+
+.fasting-chart-card {
+  gap: 14px;
+}
+
+.fast-chart {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.fast-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 168px;
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: right;
+}
+
+.fast-days {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fast-col {
+  grid-template-rows: 168px auto auto;
+}
+
+.fast-col .chart-num {
+  white-space: nowrap;
+}
+
+.fast-track {
+  height: 168px;
+  background: var(--fasting-soft);
+}
+
+.fast-midnight {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 33.333%;
+  border-top: 1px dashed #8a9bb0;
+}
+
+.fast-band {
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #5b7196 0%, var(--fasting) 100%);
+  box-shadow: inset 0 0 0 1px rgba(21, 32, 43, 0.08);
+}
+
+.fast-band.in-progress {
+  background: linear-gradient(180deg, #7f93b3 0%, #4d6488 100%);
+  opacity: 0.88;
 }
 
 .chart-goal-line {

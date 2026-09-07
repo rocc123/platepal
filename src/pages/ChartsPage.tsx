@@ -2,8 +2,9 @@ import { DateTime } from 'luxon'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useUser } from '../components/AuthGate'
+import { FastingChart } from '../components/FastingChart'
 import { addDays, localDayKey, mealDayKey, startOfLocalDay, startOfNextLocalDay, weekdayShort } from '../lib/dates'
-import { firstMealOfDay, lastMealBefore, overnightFastMinutes } from '../lib/fasting'
+import { firstMealOfDay, lastMealBefore, overnightFast } from '../lib/fasting'
 import { ensureProfile, fetchMealsForRange } from '../lib/supabase'
 import { sumMeals } from '../lib/totals'
 import type { Meal, Profile } from '../lib/types'
@@ -17,6 +18,9 @@ type DayPoint = {
   fiber: number
   calories: number
   fastingMinutes: number | null
+  fastStart: DateTime | null
+  fastEnd: DateTime | null
+  inProgress: boolean
 }
 
 function buildDays(range: RangeDays, meals: Meal[], now: DateTime<boolean> = DateTime.local()): DayPoint[] {
@@ -39,14 +43,17 @@ function buildDays(range: RangeDays, meals: Meal[], now: DateTime<boolean> = Dat
     const first = firstMealOfDay(meals, key)
     const isToday = key === todayKey
     const previous = lastMealBefore(meals, first?.eaten_at ?? (isToday ? now.toUTC().toISO() ?? '' : ''))
-    const overnight = overnightFastMinutes(previous, first, isToday && !first ? now : undefined)
+    const overnight = overnightFast(previous, first, isToday && !first ? now : undefined)
     points.push({
       key,
       date,
       protein: totals.protein_g,
       fiber: totals.fiber_g,
       calories: totals.calories,
-      fastingMinutes: overnight,
+      fastingMinutes: overnight?.minutes ?? null,
+      fastStart: overnight?.start ?? null,
+      fastEnd: overnight?.end ?? null,
+      inProgress: Boolean(isToday && overnight && !first),
     })
   }
   return points
@@ -64,16 +71,16 @@ function Chart({
   unit: string
   points: DayPoint[]
   goal?: number
-  variant: 'protein' | 'fiber' | 'calories' | 'fasting'
+  variant: 'protein' | 'fiber' | 'calories'
   valueOf: (point: DayPoint) => number | null
 }) {
   const values = points.map(valueOf)
-  const max = Math.max(goal ?? 0, variant === 'fasting' ? 16 : 0, ...values.map((value) => value ?? 0), 1)
+  const max = Math.max(goal ?? 0, ...values.map((value) => value ?? 0), 1)
   return (
     <section className="card chart-card">
       <div className="goal-head">
         <span className={`goal-label ${variant}`}>{label}</span>
-        <span className="muted">{goal != null ? `Goal ${goal}${unit}` : 'Overnight'}</span>
+        <span className="muted">{goal != null ? `Goal ${goal}${unit}` : ''}</span>
       </div>
       <div className="chart" style={{ gridTemplateColumns: `repeat(${points.length}, minmax(0, 1fr))` }}>
         {points.map((point, index) => {
@@ -195,13 +202,7 @@ export function ChartsPage() {
               valueOf={(point) => point.calories}
             />
           ) : null}
-          <Chart
-            label="Fasting"
-            unit="h"
-            points={points}
-            variant="fasting"
-            valueOf={(point) => (point.fastingMinutes == null ? null : point.fastingMinutes / 60)}
-          />
+          <FastingChart points={points} />
         </>
       ) : null}
     </div>
