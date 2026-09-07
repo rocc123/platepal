@@ -1,11 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
-import { canDetectBarcodes, detectBarcodeInSource } from '../lib/barcode'
+import {
+  canUseLiveCamera,
+  detectBarcodeInSource,
+  messageForCameraError,
+  openBarcodeCamera,
+  waitForVideoFrame,
+} from '../lib/barcode'
 import { itemFromHit, lookupBarcode } from '../lib/foods'
 import type { MealItem } from '../lib/types'
 
 export function BarcodePicker({ onPick }: { onPick: (item: MealItem, assumptions: string) => void }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const lookupRef = useRef<(raw: string) => Promise<void>>(async () => undefined)
   const [code, setCode] = useState('')
   const [scanning, setScanning] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -18,12 +25,15 @@ export function BarcodePicker({ onPick }: { onPick: (item: MealItem, assumptions
     const el = video
     let cancelled = false
 
+    el.setAttribute('playsinline', 'true')
+    el.setAttribute('webkit-playsinline', 'true')
+    el.muted = true
+    el.playsInline = true
+    el.autoplay = true
+
     async function run() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } },
-          audio: false,
-        })
+        const stream = await openBarcodeCamera()
         if (cancelled) {
           stream.getTracks().forEach((track) => track.stop())
           return
@@ -31,13 +41,15 @@ export function BarcodePicker({ onPick }: { onPick: (item: MealItem, assumptions
         streamRef.current = stream
         el.srcObject = stream
         await el.play()
+        await waitForVideoFrame(el)
         const tick = async () => {
           if (cancelled || !videoRef.current) return
           try {
             const found = await detectBarcodeInSource(videoRef.current)
             if (found) {
               setCode(found)
-              await lookup(found)
+              setScanning(false)
+              await lookupRef.current(found)
               return
             }
           } catch {
@@ -48,9 +60,9 @@ export function BarcodePicker({ onPick }: { onPick: (item: MealItem, assumptions
           }, 250)
         }
         void tick()
-      } catch {
+      } catch (err) {
         if (!cancelled) {
-          setError('Camera permission was denied. Type the barcode instead.')
+          setError(messageForCameraError(err))
           setScanning(false)
         }
       }
@@ -83,29 +95,46 @@ export function BarcodePicker({ onPick }: { onPick: (item: MealItem, assumptions
     }
   }
 
+  useEffect(() => {
+    lookupRef.current = lookup
+  })
+
   async function fromPhoto(file: File) {
     setError(null)
-    if (!file.type.startsWith('image/')) {
+    if (!file.type.startsWith('image/') && file.type !== '') {
       setError('That file is not an image.')
       return
     }
-    if (!canDetectBarcodes()) {
-      setError('This browser cannot read barcodes from a photo. Type the number instead.')
-      return
-    }
+    setBusy(true)
+    let bitmap: ImageBitmap | null = null
     try {
-      const bitmap = await createImageBitmap(file)
-      const found = await detectBarcodeInSource(bitmap)
-      bitmap.close()
+      try {
+        bitmap = await createImageBitmap(file)
+      } catch {
+        bitmap = null
+      }
+      const found = await detectBarcodeInSource(bitmap ?? file, { tryHarder: true })
       if (!found) {
-        setError('No barcode found in that photo.')
+        setError('No barcode found in that photo. Try a closer, flatter shot — or type the number.')
         return
       }
       setCode(found)
       await lookup(found)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not read that photo.')
+    } finally {
+      bitmap?.close()
+      setBusy(false)
     }
+  }
+
+  function startScan() {
+    if (!canUseLiveCamera()) {
+      setError('Live camera needs HTTPS. Take a photo of the barcode instead.')
+      return
+    }
+    setError(null)
+    setScanning(true)
   }
 
   return (
@@ -120,7 +149,12 @@ export function BarcodePicker({ onPick }: { onPick: (item: MealItem, assumptions
           placeholder="Scan or type the number"
         />
       </label>
-      {scanning ? <video ref={videoRef} className="scan-video" muted playsInline /> : null}
+      {scanning ? (
+        <div className="scan-stage">
+          <video ref={videoRef} className="scan-video" muted playsInline autoPlay />
+          <p className="scan-hint">Point the camera at the barcode</p>
+        </div>
+      ) : null}
       <div className="row-actions two">
         <button type="button" className="btn-secondary" disabled={busy} onClick={() => void lookup(code)}>
           {busy ? 'Looking up…' : 'Look up'}
@@ -130,19 +164,7 @@ export function BarcodePicker({ onPick }: { onPick: (item: MealItem, assumptions
             Stop camera
           </button>
         ) : (
-          <button
-            type="button"
-            className="btn-secondary"
-            disabled={busy}
-            onClick={() => {
-              if (!canDetectBarcodes()) {
-                setError('This browser cannot scan barcodes. Type the number instead.')
-                return
-              }
-              setError(null)
-              setScanning(true)
-            }}
-          >
+          <button type="button" className="btn-secondary" disabled={busy} onClick={startScan}>
             Scan
           </button>
         )}

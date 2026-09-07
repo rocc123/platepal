@@ -598,12 +598,32 @@ textarea {
   font-size: 0.85rem;
 }
 
-.scan-video {
-  width: 100%;
+.scan-stage {
+  position: relative;
+  overflow: hidden;
   border-radius: 10px;
   background: #111;
+}
+
+.scan-video {
+  display: block;
+  width: 100%;
   min-height: 180px;
+  aspect-ratio: 4 / 3;
   object-fit: cover;
+  background: #111;
+}
+
+.scan-hint {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  margin: 0;
+  color: #fff;
+  font-size: 0.85rem;
+  text-align: center;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.65);
 }
 
 .file-btn {
