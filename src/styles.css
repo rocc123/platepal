@@ -320,13 +320,21 @@ input[type='number'],
 input[type='date'],
 input[type='time'],
 input[type='search'],
-textarea {
+textarea,
+.otp-input {
   width: 100%;
   min-height: 48px;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 12px 14px;
   background: #fff;
+}
+
+.otp-input {
+  letter-spacing: 0.28em;
+  text-align: center;
+  font-size: 1.35rem;
+  font-variant-numeric: tabular-nums;
 }
 
 textarea {
