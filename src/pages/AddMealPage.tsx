@@ -4,6 +4,7 @@ import { BarcodePicker } from '../components/BarcodePicker'
 import { FoodSearch } from '../components/FoodSearch'
 import { MealEditor } from '../components/MealEditor'
 import { PhotoPicker } from '../components/PhotoPicker'
+import { SavedMealPicker } from '../components/SavedMealPicker'
 import { useUser } from '../components/AuthGate'
 import { analyzeMeal, resizeImageToJpeg } from '../lib/analyze'
 import {
@@ -16,10 +17,11 @@ import {
   zoneStamp,
 } from '../lib/dates'
 import { DEFAULT_MEAL_DURATION_MINUTES, parseDurationMinutes } from '../lib/fasting'
-import { getLookups, sourceIdByCode } from '../lib/lookups'
-import { createMeal, createSavedMeal, loadLookups } from '../lib/supabase'
+import { getLookups, periodById, sourceIdByCode } from '../lib/lookups'
+import { defaultSavedMealName, itemsFromSavedMeal } from '../lib/savedMeals'
+import { createMeal, createSavedMeal, fetchSavedMeals, loadLookups } from '../lib/supabase'
 import { sumItems } from '../lib/totals'
-import type { MealItem } from '../lib/types'
+import type { MealItem, SavedMeal } from '../lib/types'
 
 type Step = 'capture' | 'review'
 type Helper = 'photo' | 'search' | 'barcode' | null
@@ -61,17 +63,45 @@ export function AddMealPage() {
   const [confidence, setConfidence] = useState<number | null>(null)
   const [assumptions, setAssumptions] = useState('')
   const [sourceId, setSourceId] = useState(() => sourceIdByCode('manual'))
-  const [saveAsTemplate, setSaveAsTemplate] = useState(false)
+  const [saveAsSavedMeal, setSaveAsSavedMeal] = useState(false)
+  const [savedMealName, setSavedMealName] = useState('')
+  const [savedMealNameTouched, setSavedMealNameTouched] = useState(false)
+  const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([])
+  const [savedMealsLoading, setSavedMealsLoading] = useState(true)
   const [analyzing, setAnalyzing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const canAnalyze = Boolean(note.trim() || file)
   const namedCount = items?.filter((item) => item.name.trim()).length ?? 0
+  const suggestedSavedName = defaultSavedMealName(
+    items ?? [],
+    note,
+    periodById(periodId, lookups)?.label,
+  )
+  const resolvedSavedName = savedMealNameTouched ? savedMealName : suggestedSavedName
 
   useEffect(() => {
     loadLookups().then(setLookupsState)
   }, [])
+
+  useEffect(() => {
+    let active = true
+    fetchSavedMeals(user.id)
+      .then((rows) => {
+        if (!active) return
+        setSavedMeals(rows)
+      })
+      .catch(() => {
+        if (active) setSavedMeals([])
+      })
+      .finally(() => {
+        if (active) setSavedMealsLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [user.id])
 
   useEffect(() => {
     return () => {
@@ -109,6 +139,15 @@ export function AddMealPage() {
     setItems(nextItems)
     setStep('review')
     setError(null)
+  }
+
+  function applySavedMeal(saved: SavedMeal) {
+    setNote((current) => current.trim() || saved.note || saved.name)
+    setConfidence(null)
+    setAssumptions(`From saved meal “${saved.name}”. Edit anything before you log it.`)
+    setSourceId(sourceIdByCode('saved'))
+    setSaveAsSavedMeal(false)
+    openReview(itemsFromSavedMeal(saved))
   }
 
   async function onAnalyze() {
@@ -166,9 +205,9 @@ export function AddMealPage() {
         ...stamp,
         ...totals,
       })
-      if (saveAsTemplate) {
+      if (saveAsSavedMeal) {
         await createSavedMeal(user.id, {
-          name: note.trim() || named[0].name,
+          name: resolvedSavedName.trim() || suggestedSavedName,
           note: note.trim() || null,
           items: named,
           ...totals,
@@ -207,8 +246,9 @@ export function AddMealPage() {
           lookups={lookups}
           confidence={confidence}
           assumptions={assumptions}
-          saveAsTemplate={saveAsTemplate}
-          showTemplateCheckbox
+          saveAsSavedMeal={saveAsSavedMeal}
+          showSavedMealCheckbox
+          savedMealName={resolvedSavedName}
           compactWhen
           saving={saving}
           error={error}
@@ -227,7 +267,11 @@ export function AddMealPage() {
             setPeriodId(next)
             setPeriodTouched(true)
           }}
-          onSaveAsTemplateChange={setSaveAsTemplate}
+          onSaveAsSavedMealChange={setSaveAsSavedMeal}
+          onSavedMealNameChange={(next) => {
+            setSavedMealNameTouched(true)
+            setSavedMealName(next)
+          }}
           onSave={onSave}
           onCancel={goBack}
         />
@@ -247,7 +291,7 @@ export function AddMealPage() {
         <p className="composer-kicker">Step 1 of 2</p>
         <h1>What was on the plate?</h1>
         <p className="lede">
-          Start with a note or a photo. Search and barcode are extras — you do not need every field.
+          Repeat a saved meal, or start with a note or photo. Look up and barcode are extras.
         </p>
 
         {items ? (
@@ -263,6 +307,22 @@ export function AddMealPage() {
             <span className="continue-go">Review →</span>
           </button>
         ) : null}
+
+        <div className="saved-shelf">
+          <div className="saved-shelf-head">
+            <p className="composer-kicker">Saved meals</p>
+            <p className="helper-copy">
+              {savedMealsLoading
+                ? 'Looking up what you kept…'
+                : savedMeals.length
+                  ? 'Tap one to reuse it. You can still edit the numbers.'
+                  : 'Keep a meal on the next screen and name it — Oat Breakfast, Friday chicken, whatever you’ll look up later.'}
+            </p>
+          </div>
+          {savedMealsLoading || savedMeals.length ? (
+            <SavedMealPicker meals={savedMeals} loading={savedMealsLoading} onPick={applySavedMeal} />
+          ) : null}
+        </div>
 
         <label className="field plate-note">
           <span>

@@ -4,7 +4,8 @@ import { MealEditor } from '../components/MealEditor'
 import { useUser } from '../components/AuthGate'
 import { dateTimeFromInputs, fromUtc, inferPeriodFromWhen, localDateInput, localTimeInput, zoneStamp } from '../lib/dates'
 import { DEFAULT_MEAL_DURATION_MINUTES, parseDurationMinutes } from '../lib/fasting'
-import { getLookups } from '../lib/lookups'
+import { getLookups, periodById } from '../lib/lookups'
+import { defaultSavedMealName } from '../lib/savedMeals'
 import { createSavedMeal, deleteMeal, fetchMealWithItems, loadLookups, updateMeal } from '../lib/supabase'
 import { sumItems } from '../lib/totals'
 import type { Meal, MealItem } from '../lib/types'
@@ -26,6 +27,8 @@ export function EditMealPage() {
   const [durationMinutes, setDurationMinutes] = useState(DEFAULT_MEAL_DURATION_MINUTES)
   const [periodId, setPeriodId] = useState(0)
   const [periodTouched, setPeriodTouched] = useState(false)
+  const [savedMealName, setSavedMealName] = useState('')
+  const [savedMealNameTouched, setSavedMealNameTouched] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -104,7 +107,10 @@ export function EditMealPage() {
     }
   }
 
-  async function onSaveTemplate() {
+  const suggestedSavedName = defaultSavedMealName(items, note, periodById(periodId, lookups)?.label)
+  const resolvedSavedName = savedMealNameTouched ? savedMealName : suggestedSavedName
+
+  async function onSaveAsSavedMeal() {
     const named = items.filter((item) => item.name.trim())
     if (!named.length) {
       setError('Add at least one food.')
@@ -115,14 +121,14 @@ export function EditMealPage() {
     try {
       const totals = sumItems(named)
       await createSavedMeal(user.id, {
-        name: note.trim() || named[0].name,
+        name: resolvedSavedName.trim() || suggestedSavedName,
         note: note.trim() || null,
         items: named,
         ...totals,
       })
-      setStatus('Saved as template.')
+      setStatus(`Kept as “${resolvedSavedName.trim() || suggestedSavedName}”.`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save template.')
+      setError(err instanceof Error ? err.message : 'Could not save that meal.')
     } finally {
       setSaving(false)
     }
@@ -157,8 +163,9 @@ export function EditMealPage() {
         lookups={lookups}
         confidence={meal.confidence}
         assumptions=""
-        saveAsTemplate={false}
-        showTemplateCheckbox={false}
+        saveAsSavedMeal={false}
+        showSavedMealCheckbox={false}
+        savedMealName={resolvedSavedName}
         saving={saving}
         error={error}
         onNoteChange={setNote}
@@ -188,11 +195,15 @@ export function EditMealPage() {
           setPeriodId(next)
           setPeriodTouched(true)
         }}
-        onSaveAsTemplateChange={() => undefined}
+        onSaveAsSavedMealChange={() => undefined}
+        onSavedMealNameChange={(next) => {
+          setSavedMealNameTouched(true)
+          setSavedMealName(next)
+        }}
         onSave={onSave}
         onCancel={() => navigate('/')}
         onDelete={onDelete}
-        onSaveTemplate={onSaveTemplate}
+        onSaveAsSavedMeal={onSaveAsSavedMeal}
       />
     </div>
   )

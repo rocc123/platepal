@@ -1,40 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const SYSTEM_PROMPT = `You estimate nutrition from a meal photo and/or a short user note for personal tracking.
-
-Priority: protein_g and fiber_g. Also return calories, carbs_g, fat_g.
-
-Rules:
-- Identify each visible or described food.
-- Estimate portion in grams.
-- If a user note is present, treat it as ground truth for ingredients and portions.
-- Do not invent hidden oils, butter, or sauces unless they are visible or mentioned.
-- If unsure, lower confidence and still give a best estimate.
-- Return JSON only. No markdown.
-
-JSON shape:
-{
-  "items": [
-    {
-      "name": "string",
-      "grams": number,
-      "calories": number,
-      "protein_g": number,
-      "fiber_g": number,
-      "carbs_g": number,
-      "fat_g": number
-    }
-  ],
-  "totals": {
-    "calories": number,
-    "protein_g": number,
-    "fiber_g": number,
-    "carbs_g": number,
-    "fat_g": number
-  },
-  "confidence": number,
-  "assumptions": "short string"
-}`
+const SYSTEM_PROMPT =
+  'Estimate visible or described foods for personal tracking. Priority: protein_g and fiber_g. Treat a user note as ground truth. Do not invent hidden oils or sauces. If unsure, lower confidence and still estimate.'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -93,6 +60,58 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+type GeminiCallError = Error & { status?: number }
+
+const DEFAULT_MODELS = ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite']
+const PREMIUM_FLASH = /gemini-3\.(6|7|8)-flash$/i
+
+const RESPONSE_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    items: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          name: { type: 'STRING' },
+          grams: { type: 'NUMBER' },
+          calories: { type: 'NUMBER' },
+          protein_g: { type: 'NUMBER' },
+          fiber_g: { type: 'NUMBER' },
+          carbs_g: { type: 'NUMBER' },
+          fat_g: { type: 'NUMBER' },
+        },
+        required: ['name', 'protein_g', 'fiber_g'],
+      },
+    },
+    confidence: { type: 'NUMBER' },
+    assumptions: { type: 'STRING' },
+  },
+  required: ['items', 'confidence'],
+}
+
+function configuredModels() {
+  const requested = Deno.env.get('GEMINI_MODEL')?.trim()
+  const fallback = Deno.env.get('GEMINI_FALLBACK_MODEL')?.trim()
+  const primary = requested && !PREMIUM_FLASH.test(requested) ? requested : DEFAULT_MODELS[0]
+  if (requested && PREMIUM_FLASH.test(requested)) {
+    console.error(`analyze skipping ${requested}; using ${primary} so paid credits last longer`)
+  }
+  return [...new Set([primary, fallback, ...DEFAULT_MODELS].filter(Boolean))]
+}
+
+function isCapacityError(message: string, status?: number) {
+  if (status === 429 || status === 503) return true
+  return /high demand|try again later|resource.?exhausted|unavailable|overloaded|quota/i.test(message)
+}
+
+function friendlyAnalyzeError(message: string, status?: number) {
+  if (isCapacityError(message, status)) {
+    return 'Gemini is busy right now. Try Analyze again in a moment, or enter the numbers yourself.'
+  }
+  return message
+}
+
 function geminiErrorMessage(payload: unknown, status: number) {
   const message =
     payload &&
@@ -116,9 +135,9 @@ function extractGeminiText(payload: unknown) {
     .join('')
 }
 
-async function generateNutrition(geminiKey: string, model: string, parts: Array<Record<string, unknown>>) {
+async function callGemini(geminiKey: string, model: string, parts: Array<Record<string, unknown>>) {
   const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
-  const request = {
+  const geminiRes = await fetch(geminiUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -127,48 +146,71 @@ async function generateNutrition(geminiKey: string, model: string, parts: Array<
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
       contents: [{ role: 'user', parts }],
-      generationConfig: { responseMimeType: 'application/json' },
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseSchema: RESPONSE_SCHEMA,
+        thinkingConfig: { thinkingLevel: 'MINIMAL' },
+        mediaResolution: 'MEDIA_RESOLUTION_LOW',
+        maxOutputTokens: 512,
+      },
     }),
+  })
+
+  let geminiJson: unknown
+  try {
+    geminiJson = await geminiRes.json()
+  } catch {
+    const error: GeminiCallError = new Error(`Gemini returned non-JSON (${geminiRes.status})`)
+    error.status = geminiRes.status
+    throw error
   }
 
+  if (!geminiRes.ok) {
+    const error: GeminiCallError = new Error(geminiErrorMessage(geminiJson, geminiRes.status))
+    error.status = geminiRes.status
+    throw error
+  }
+
+  const usage = (geminiJson as { usageMetadata?: Record<string, unknown> }).usageMetadata
+  if (usage) console.error(`analyze gemini ${model} usage`, usage)
+
+  const text = stripFences(extractGeminiText(geminiJson))
+  if (!text) throw new Error('Gemini returned an empty response')
+
+  return JSON.parse(text) as {
+    items?: Array<Record<string, unknown>>
+    confidence?: number
+    assumptions?: string
+  }
+}
+
+async function generateNutrition(geminiKey: string, parts: Array<Record<string, unknown>>) {
   let lastError = 'Could not reach Gemini'
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const geminiRes = await fetch(geminiUrl, request)
-      let geminiJson: unknown
+  let lastStatus: number | undefined
+
+  for (const model of configuredModels()) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        geminiJson = await geminiRes.json()
-      } catch {
-        lastError = `Gemini returned non-JSON (${geminiRes.status})`
-        console.error(`analyze gemini attempt ${attempt}:`, lastError)
-        if (attempt < 2) await sleep(400)
-        continue
+        return await callGemini(geminiKey, model, parts)
+      } catch (error) {
+        lastStatus = error instanceof Error ? (error as GeminiCallError).status : undefined
+        lastError = error instanceof Error ? error.message : 'Could not reach Gemini'
+        if (lastError === 'Unexpected end of JSON input' || lastError.startsWith('JSON')) {
+          lastError = 'Gemini returned invalid JSON'
+        }
+        console.error(`analyze gemini ${model} attempt ${attempt}:`, lastError)
+        // 429 / quota / high demand: do not burn another request on the same model.
+        if (isCapacityError(lastError, lastStatus)) break
+        if (attempt < 2 && /empty response|invalid JSON|non-JSON/i.test(lastError)) {
+          await sleep(600)
+          continue
+        }
+        break
       }
-
-      if (!geminiRes.ok) {
-        lastError = geminiErrorMessage(geminiJson, geminiRes.status)
-        console.error(`analyze gemini attempt ${attempt}:`, lastError)
-        if (attempt < 2) await sleep(400)
-        continue
-      }
-
-      return JSON.parse(stripFences(extractGeminiText(geminiJson))) as {
-        items?: Array<Record<string, unknown>>
-        totals?: Record<string, unknown>
-        confidence?: number
-        assumptions?: string
-      }
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : 'Could not reach Gemini'
-      if (lastError === 'Unexpected end of JSON input' || lastError.startsWith('JSON')) {
-        lastError = 'Gemini returned invalid JSON'
-      }
-      console.error(`analyze gemini attempt ${attempt}:`, lastError)
-      if (attempt < 2) await sleep(400)
     }
   }
 
-  throw new Error(lastError)
+  throw new Error(friendlyAnalyzeError(lastError, lastStatus))
 }
 
 Deno.serve(async (req) => {
@@ -223,21 +265,21 @@ async function handleAnalyze(req: Request) {
   if (!note && !imageBase64) return json({ error: 'Add a photo or a short note first.' }, 400)
 
   const geminiKey = Deno.env.get('GEMINI_API_KEY')
-  const model = Deno.env.get('GEMINI_MODEL') || 'gemini-3.8-flash'
   if (!geminiKey) return json({ error: 'GEMINI_API_KEY is not set' }, 500)
 
   const parts: Array<Record<string, unknown>> = []
-  if (note) parts.push({ text: `User note: ${note}` })
+  if (note) parts.push({ text: note })
   if (imageBase64) {
     parts.push({
       inline_data: {
         mime_type: body.mimeType === 'image/webp' ? 'image/webp' : 'image/jpeg',
         data: imageBase64,
       },
+      mediaResolution: { level: 'MEDIA_RESOLUTION_LOW' },
     })
   }
 
-  const parsed = await generateNutrition(geminiKey, model, parts)
+  const parsed = await generateNutrition(geminiKey, parts)
 
   const items = (parsed.items ?? []).map((item) => ({
     name: String(item.name ?? ''),
