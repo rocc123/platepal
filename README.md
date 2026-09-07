@@ -43,6 +43,22 @@ supabase secrets set GEMINI_MODEL=gemini-2.5-flash
 
 The Gemini key never ships to the browser. Photos are resized on the device and are not stored.
 
+## Secrets on Cloud Agents
+
+Running the app on a Cursor Cloud Agent needs no secrets: with none set it starts in **local mode** (see above). Secrets only unlock the optional Supabase + AI features.
+
+Add secrets in the **Secrets** panel next to the agent chat. They are injected as environment variables into **new** agent VMs (not the currently running one), so set them, then start a fresh agent or restart the `dev` terminal.
+
+Only the browser/build-time vars belong here. Vite bakes any `VITE_`-prefixed variable into the client bundle at build/startup, so setting them in the panel is enough — no `.env` file needed:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `VITE_USDA_API_KEY` (optional; falls back to USDA `DEMO_KEY`)
+
+Because `VITE_` values ship to the browser, they are not private. That is fine for the Supabase anon key and USDA key, which are meant to be public. Never put a sensitive key (like `GEMINI_API_KEY`) behind a `VITE_` name.
+
+Server-side secrets for the `analyze` function (`GEMINI_API_KEY`, `GEMINI_MODEL`) are **not** Cloud Agent secrets — set them in Supabase with `supabase secrets set` as shown above.
+
 ## Deploy
 
 There are two pieces: the website (Vercel or Netlify) and the Analyze function (Supabase). Do the website first.
