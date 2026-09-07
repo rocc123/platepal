@@ -78,10 +78,10 @@ Edge Function secrets (Supabase dashboard / `supabase secrets set`):
 
 ```
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-3.8-flash
+GEMINI_MODEL=gemini-3.5-flash-lite
 ```
 
-Use whatever current Gemini Flash model ID is available in AI Studio if `gemini-3.8-flash` is renamed. Prefer the cheapest Flash-class vision model.
+Use whatever current Gemini Flash-Lite model ID is available in AI Studio if `gemini-3.5-flash-lite` is renamed. Prefer the cheapest Flash-Lite vision model for free-tier headroom.
 
 ---
 
@@ -280,8 +280,8 @@ type AnalyzeRequest = {
 At least one of `note` or `imageBase64` is required.
 
 **Before upload, the client must:**
-- resize the image so the long edge is <= 1280px
-- encode JPEG quality ~0.7
+- resize the image so the long edge is <= 384px
+- encode JPEG quality ~0.55
 - skip upload if the file is not an image
 
 **Gemini system prompt (use this text):**

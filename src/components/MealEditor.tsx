@@ -16,8 +16,9 @@ type MealEditorProps = {
   lookups: Lookups
   confidence: number | null
   assumptions: string
-  saveAsTemplate: boolean
-  showTemplateCheckbox: boolean
+  saveAsSavedMeal: boolean
+  showSavedMealCheckbox: boolean
+  savedMealName: string
   compactWhen?: boolean
   saving: boolean
   error: string | null
@@ -27,11 +28,12 @@ type MealEditorProps = {
   onTimeChange: (time: string) => void
   onDurationChange: (minutes: number) => void
   onPeriodChange: (periodId: number) => void
-  onSaveAsTemplateChange: (checked: boolean) => void
+  onSaveAsSavedMealChange: (checked: boolean) => void
+  onSavedMealNameChange: (name: string) => void
   onSave: () => void
   onCancel: () => void
   onDelete?: () => void
-  onSaveTemplate?: () => void
+  onSaveAsSavedMeal?: () => void
 }
 
 function emptyItem(): MealItem {
@@ -76,8 +78,9 @@ export function MealEditor({
   lookups,
   confidence,
   assumptions,
-  saveAsTemplate,
-  showTemplateCheckbox,
+  saveAsSavedMeal,
+  showSavedMealCheckbox,
+  savedMealName,
   compactWhen = false,
   saving,
   error,
@@ -87,11 +90,12 @@ export function MealEditor({
   onTimeChange,
   onDurationChange,
   onPeriodChange,
-  onSaveAsTemplateChange,
+  onSaveAsSavedMealChange,
+  onSavedMealNameChange,
   onSave,
   onCancel,
   onDelete,
-  onSaveTemplate,
+  onSaveAsSavedMeal,
 }: MealEditorProps) {
   const totals = sumItems(items)
   const [adding, setAdding] = useState(false)
@@ -278,15 +282,42 @@ export function MealEditor({
         <span>{totals.calories} cal</span>
       </div>
 
-      {showTemplateCheckbox ? (
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={saveAsTemplate}
-            onChange={(event) => onSaveAsTemplateChange(event.target.checked)}
-          />
-          Also save as template
-        </label>
+      {showSavedMealCheckbox ? (
+        <div className="saved-keep">
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={saveAsSavedMeal}
+              onChange={(event) => onSaveAsSavedMealChange(event.target.checked)}
+            />
+            Also keep as a saved meal
+          </label>
+          {saveAsSavedMeal ? (
+            <label className="field">
+              <span>Saved meal name</span>
+              <input
+                type="text"
+                value={savedMealName}
+                onChange={(event) => onSavedMealNameChange(event.target.value)}
+                placeholder="Oat Breakfast"
+              />
+            </label>
+          ) : null}
+        </div>
+      ) : null}
+
+      {onSaveAsSavedMeal ? (
+        <div className="saved-keep">
+          <label className="field">
+            <span>Saved meal name</span>
+            <input
+              type="text"
+              value={savedMealName}
+              onChange={(event) => onSavedMealNameChange(event.target.value)}
+              placeholder="Oat Breakfast"
+            />
+          </label>
+        </div>
       ) : null}
 
       {error ? <p className="error">{error}</p> : null}
@@ -298,9 +329,9 @@ export function MealEditor({
         <button type="button" className="btn-secondary" disabled={saving} onClick={onCancel}>
           Cancel
         </button>
-        {onSaveTemplate ? (
-          <button type="button" className="btn-secondary" disabled={saving} onClick={onSaveTemplate}>
-            Save as template
+        {onSaveAsSavedMeal ? (
+          <button type="button" className="btn-secondary" disabled={saving} onClick={onSaveAsSavedMeal}>
+            Keep this meal
           </button>
         ) : null}
         {onDelete ? (

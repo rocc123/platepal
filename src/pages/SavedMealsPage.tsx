@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useUser } from '../components/AuthGate'
 import { inferPeriodFromWhen, nowLocal, zoneStamp } from '../lib/dates'
 import { DEFAULT_MEAL_DURATION_MINUTES } from '../lib/fasting'
 import { sourceIdByCode } from '../lib/lookups'
+import { filterSavedMeals, itemsFromSavedMeal } from '../lib/savedMeals'
 import { createMeal, deleteSavedMeal, fetchSavedMeals, renameSavedMeal } from '../lib/supabase'
-import type { MealItem, SavedMeal } from '../lib/types'
+import type { SavedMeal } from '../lib/types'
 
 export function SavedMealsPage() {
   const user = useUser()
@@ -13,9 +14,11 @@ export function SavedMealsPage() {
   const [meals, setMeals] = useState<SavedMeal[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [busyId, setBusyId] = useState<string | null>(null)
+  const visible = useMemo(() => filterSavedMeals(meals, query), [meals, query])
 
   async function reload() {
     const rows = await fetchSavedMeals(user.id)
@@ -43,7 +46,7 @@ export function SavedMealsPage() {
     setBusyId(saved.id)
     setError(null)
     try {
-      const items = (saved.items ?? []) as MealItem[]
+      const items = itemsFromSavedMeal(saved)
       const when = nowLocal()
       await createMeal(user.id, {
         note: saved.note || saved.name,
@@ -57,19 +60,7 @@ export function SavedMealsPage() {
         carbs_g: saved.carbs_g,
         fat_g: saved.fat_g,
         confidence: null,
-        items: items.length
-          ? items
-          : [
-              {
-                name: saved.name,
-                grams: null,
-                calories: saved.calories,
-                protein_g: saved.protein_g,
-                fiber_g: saved.fiber_g,
-                carbs_g: saved.carbs_g,
-                fat_g: saved.fat_g,
-              },
-            ],
+        items,
       })
       navigate('/', { replace: true })
     } catch (err) {
@@ -100,7 +91,7 @@ export function SavedMealsPage() {
       await deleteSavedMeal(id, user.id)
       await reload()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not delete template.')
+      setError(err instanceof Error ? err.message : 'Could not delete saved meal.')
     } finally {
       setBusyId(null)
     }
@@ -108,14 +99,29 @@ export function SavedMealsPage() {
 
   return (
     <div className="page">
-      <h1>Saved</h1>
+      <h1>Saved meals</h1>
+      <p className="lede">Name them something you’ll recognize — Oat Breakfast, gym lunch, Sunday eggs.</p>
       {loading ? <p className="status">Loading…</p> : null}
       {error ? <p className="error">{error}</p> : null}
+      {!loading && meals.length > 0 ? (
+        <label className="field">
+          <span>Look one up</span>
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Oat Breakfast"
+            autoComplete="off"
+          />
+        </label>
+      ) : null}
       {!loading && meals.length === 0 ? (
-        <p className="status">No templates yet. Save one from a meal.</p>
+        <p className="status">No saved meals yet. Keep one when you add a meal and give it a name.</p>
+      ) : !loading && visible.length === 0 ? (
+        <p className="status">No saved meals match that name.</p>
       ) : (
         <div className="meal-list">
-          {meals.map((meal) => (
+          {visible.map((meal) => (
             <article className="card saved-row" key={meal.id}>
               {renamingId === meal.id ? (
                 <>

@@ -319,6 +319,7 @@ input[type='email'],
 input[type='number'],
 input[type='date'],
 input[type='time'],
+input[type='search'],
 textarea {
   width: 100%;
   min-height: 48px;
@@ -608,6 +609,48 @@ textarea {
   letter-spacing: -0.02em;
 }
 
+.fasting-card {
+  gap: 8px;
+}
+
+.fasting-card .composer-kicker {
+  margin: 0;
+}
+
+.fast-clock {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 2px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.fast-unit {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+}
+
+.fast-unit strong {
+  font-family: var(--display);
+  font-size: 2.35rem;
+  font-weight: 560;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.fast-unit em {
+  font-style: normal;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.fasting-empty .btn {
+  justify-self: start;
+  margin-top: 4px;
+}
+
 .empty {
   padding: 28px 8px 8px;
   text-align: center;
@@ -772,6 +815,58 @@ textarea {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 8px;
+}
+
+.saved-shelf {
+  display: grid;
+  gap: 10px;
+  padding: 14px 14px 12px;
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(213, 236, 234, 0.55) 0%, rgba(255, 252, 247, 0.72) 100%);
+  border: 1px solid #b7d4d1;
+  animation: rise 420ms ease both;
+}
+
+.saved-shelf-head {
+  display: grid;
+  gap: 4px;
+}
+
+.saved-shelf .composer-kicker {
+  color: var(--protein);
+}
+
+.saved-picker {
+  display: grid;
+  gap: 10px;
+}
+
+.saved-hits {
+  max-height: 220px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.saved-hit {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: #c5d8d5;
+}
+
+.saved-hit strong {
+  font-family: var(--display);
+  font-size: 1.05rem;
+  font-weight: 560;
+  letter-spacing: -0.02em;
+}
+
+.saved-keep {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--protein-soft);
+  border: 1px solid #b7d4d1;
 }
 
 .method-tile {
