@@ -4,6 +4,13 @@ Personal protein + fiber tracker. Snap a meal photo or type a note, edit the est
 
 This repo follows `PLAN.md`. Meal sources and breakfast/lunch/dinner/snack live in lookup tables. `eaten_at` is stored in UTC with the app timezone name and offset (Luxon).
 
+Clone from GitHub:
+
+```bash
+git clone https://github.com/rocc123/platepal.git
+cd platepal
+```
+
 ## Run locally
 
 ```bash
@@ -42,7 +49,7 @@ There are two pieces: the website (Vercel or Netlify) and the Analyze function (
 
 ### 1. Website on Vercel
 
-From the project folder (PowerShell is fine):
+Import [github.com/rocc123/platepal](https://github.com/rocc123/platepal) in the Vercel dashboard, or from the project folder (PowerShell is fine):
 
 ```bash
 npx vercel login
