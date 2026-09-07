@@ -38,7 +38,7 @@ export function PhotoPicker({ previewUrl, onPick, onClear }: PhotoPickerProps) {
         </>
       ) : (
         <label className="photo-btn" htmlFor={id}>
-          Take or pick a meal photo
+          Take or pick a photo
         </label>
       )}
       {error ? <p className="error">{error}</p> : null}

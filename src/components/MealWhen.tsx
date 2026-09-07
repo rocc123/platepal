@@ -8,10 +8,20 @@ type MealWhenProps = {
   durationMinutes: number
   periodId: number
   lookups: Lookups
+  compact?: boolean
   onDateChange: (date: string) => void
   onTimeChange: (time: string) => void
   onDurationChange: (minutes: number) => void
   onPeriodChange: (periodId: number) => void
+}
+
+function whenSummary(date: string, time: string, durationMinutes: number, periodLabel: string) {
+  try {
+    const when = dateTimeFromInputs(date, time)
+    return `${when.toFormat('ccc, LLL d · t')} · ${periodLabel} · ${durationMinutes} min`
+  } catch {
+    return `${periodLabel} · ${durationMinutes} min`
+  }
 }
 
 export function MealWhen({
@@ -20,11 +30,13 @@ export function MealWhen({
   durationMinutes,
   periodId,
   lookups,
+  compact = false,
   onDateChange,
   onTimeChange,
   onDurationChange,
   onPeriodChange,
 }: MealWhenProps) {
+  const periodLabel = lookups.periods.find((period) => period.id === periodId)?.label ?? 'Meal'
   let fastingHint = `Default ${DEFAULT_MEAL_DURATION_MINUTES} minutes. Fasting starts when the meal ends.`
   try {
     fastingHint = fastingStartsLabel(dateTimeFromInputs(date, time), durationMinutes)
@@ -32,7 +44,7 @@ export function MealWhen({
     // keep the default hint until date/time are valid
   }
 
-  return (
+  const fields = (
     <div className="when">
       <div className="item-grid when-grid">
         <label className="field">
@@ -69,5 +81,17 @@ export function MealWhen({
         ))}
       </div>
     </div>
+  )
+
+  if (!compact) return fields
+
+  return (
+    <details className="when-fold">
+      <summary>
+        <span>{whenSummary(date, time, durationMinutes, periodLabel)}</span>
+        <em>change if needed</em>
+      </summary>
+      {fields}
+    </details>
   )
 }
