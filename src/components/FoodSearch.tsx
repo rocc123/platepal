@@ -2,7 +2,13 @@ import { useEffect, useState } from 'react'
 import { itemFromHit, searchUsdaFoods, type FoodHit } from '../lib/foods'
 import type { MealItem } from '../lib/types'
 
-export function FoodSearch({ onPick }: { onPick: (item: MealItem, hit: FoodHit) => void }) {
+export function FoodSearch({
+  onPick,
+  label = 'Look up a food (USDA)',
+}: {
+  onPick: (item: MealItem, hit: FoodHit) => void
+  label?: string
+}) {
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<FoodHit[]>([])
   const [loading, setLoading] = useState(false)
@@ -43,7 +49,7 @@ export function FoodSearch({ onPick }: { onPick: (item: MealItem, hit: FoodHit) 
   return (
     <div className="lookup">
       <label className="field">
-        <span>Look up a food (USDA)</span>
+        <span>{label}</span>
         <input
           type="text"
           value={query}
