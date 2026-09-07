@@ -2,6 +2,8 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
+  // Marketplace syncs NEXT_PUBLIC_SUPABASE_*; Vite needs this prefix to expose them.
+  envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
   plugins: [react()],
   server: {
     host: '0.0.0.0',

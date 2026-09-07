@@ -54,6 +54,32 @@ function json(body: unknown, status = 200) {
   })
 }
 
+function firstNonEmpty(...values: Array<string | undefined | null>): string | undefined {
+  for (const value of values) {
+    const trimmed = value?.trim()
+    if (trimmed) return trimmed
+  }
+  return undefined
+}
+
+/** Marketplace and newer CLI inject publishable keys instead of SUPABASE_ANON_KEY. */
+function getAnonOrPublishableKey() {
+  const direct = firstNonEmpty(
+    Deno.env.get('SUPABASE_ANON_KEY'),
+    Deno.env.get('SUPABASE_PUBLISHABLE_KEY'),
+  )
+  if (direct) return direct
+
+  const raw = Deno.env.get('SUPABASE_PUBLISHABLE_KEYS')
+  if (!raw) return undefined
+  try {
+    const parsed = JSON.parse(raw) as Record<string, string>
+    return firstNonEmpty(parsed.default, ...Object.values(parsed))
+  } catch {
+    return undefined
+  }
+}
+
 function stripFences(text: string) {
   return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
 }
@@ -71,7 +97,7 @@ Deno.serve(async (req) => {
   if (!authHeader) return json({ error: 'Missing authorization' }, 401)
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
-  const supabaseAnon = Deno.env.get('SUPABASE_ANON_KEY')
+  const supabaseAnon = getAnonOrPublishableKey()
   if (!supabaseUrl || !supabaseAnon) return json({ error: 'Server is missing Supabase config' }, 500)
 
   const supabase = createClient(supabaseUrl, supabaseAnon, {

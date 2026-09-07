@@ -1,11 +1,13 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { fromUtc, startOfLocalDay, startOfNextLocalDay, zoneStamp } from './dates'
+import { resolveSupabaseBrowserEnv } from './env'
 import { parseDurationMinutes } from './fasting'
 import { LOOKUP_SEED, inferPeriodId, setLookups, sourceIdByCode, type Lookups } from './lookups'
 import type { Meal, MealItem, MealPeriodRow, MealSourceRow, Profile, SavedMeal, SessionUser } from './types'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim() ?? ''
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() ?? ''
+const { url: supabaseUrl, anonKey: supabaseAnonKey } = resolveSupabaseBrowserEnv(
+  import.meta.env as unknown as Record<string, string | undefined>,
+)
 
 export const usingLocalData = !supabaseUrl || !supabaseAnonKey
 

@@ -59,50 +59,26 @@ Because `VITE_` values ship to the browser, they are not private. That is fine f
 
 Server-side secrets for the `analyze` function (`GEMINI_API_KEY`, `GEMINI_MODEL`) are **not** Cloud Agent secrets — set them in Supabase with `supabase secrets set` as shown above.
 
-## Deploy
+## Deploy (Vercel frontend + Supabase Postgres)
 
-There are two pieces: the website (Vercel or Netlify) and the Analyze function (Supabase). Do the website first.
+Recommended path: create the website and the Postgres project from Vercel so billing and env vars stay in one place.
 
-### 1. Website on Vercel
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frocc123%2Fplatepal&project-name=plate-pal&repository-name=platepal&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22supabase%22%2C%22productSlug%22%3A%22supabase%22%2C%22protocol%22%3A%22storage%22%2C%22allowConnectExistingProduct%22%3Atrue%7D%5D)
 
-Import [github.com/rocc123/platepal](https://github.com/rocc123/platepal) in the Vercel dashboard, or from the project folder (PowerShell is fine):
+Or do it from an existing clone:
 
-```bash
-npx vercel login
-npx vercel
-```
+1. Import [github.com/rocc123/platepal](https://github.com/rocc123/platepal) at [vercel.com/new](https://vercel.com/new). Framework **Vite**, build `npm run build`, output `dist`.
+2. In the Vercel project: **Storage → Create Database → Supabase** (or `npx vercel integration add supabase` after `npx vercel link`).
+3. Marketplace syncs `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. The Vite build maps those onto the client automatically. Redeploy after the database is connected — Vite bakes public keys in at **build** time.
+4. Open **Supabase Studio** from the Vercel Storage page. In the SQL Editor, run `supabase/migrations/0001_init.sql`, then `0002_lookups_and_timezone.sql`, then `0003_meal_duration.sql`.
+5. **Authentication → Providers → Email**: leave magic link / OTP on.
+6. **Authentication → URL Configuration**:
+   - Site URL: `https://your-app.vercel.app`
+   - Redirect URLs: that origin plus `http://127.0.0.1:4521` for local.
 
-When it asks, set:
+### Analyze function (optional until login works)
 
-- Framework: Vite
-- Build command: `npm run build`
-- Output directory: `dist`
-
-Then add env vars in the Vercel project (**Settings → Environment Variables**), or at the prompt:
-
-```
-VITE_SUPABASE_URL=https://xxxx.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-or-publishable-key
-```
-
-Vite bakes those in at build time. After you add or change them, redeploy:
-
-```bash
-npx vercel --prod
-```
-
-That prints a URL like `https://plate-pal-xxx.vercel.app`.
-
-### 2. Tell Supabase about that URL
-
-In Supabase: **Authentication → URL Configuration**.
-
-- Site URL: `https://your-vercel-url.vercel.app`
-- Redirect URLs: add that same origin (and keep `http://127.0.0.1:4521` for local).
-
-### 3. Analyze function (optional until login works)
-
-In WSL, from this repo:
+Gemini stays on Supabase. Never put `GEMINI_API_KEY` or the service-role / secret key in Vercel.
 
 ```bash
 npx supabase login
@@ -112,9 +88,15 @@ npx supabase secrets set GEMINI_API_KEY=your-gemini-key
 npx supabase secrets set GEMINI_MODEL=gemini-2.5-flash
 ```
 
-The project ref is in **Project Settings → General**. Use your Gemini key here, not in Vercel.
+The project ref is in **Project Settings → General**.
 
-Netlify works too: same `dist` output, and `public/_redirects` is already in the repo for SPA routes.
+CLI deploy of the website (after `npx vercel login`):
+
+```bash
+npx vercel --prod
+```
+
+Netlify works too: same `dist` output, and `public/_redirects` is already in the repo for SPA routes. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` there yourself.
 
 ## What is in v1
 
