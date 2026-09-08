@@ -3,6 +3,7 @@ import { fromUtc, startOfLocalDay, startOfNextLocalDay, zoneStamp } from './date
 import { resolveSupabaseBrowserEnv } from './env'
 import { parseDurationMinutes } from './fasting'
 import { LOOKUP_SEED, inferPeriodId, setLookups, sourceIdByCode, type Lookups } from './lookups'
+import { ensurePortion } from './portions'
 import type { Meal, MealItem, MealPeriodRow, MealSourceRow, Profile, SavedMeal, SessionUser } from './types'
 
 const { url: supabaseUrl, anonKey: supabaseAnonKey } = resolveSupabaseBrowserEnv(
@@ -477,6 +478,7 @@ export async function fetchMealWithItems(
     const items = db.meal_items
       .filter((item) => item.meal_id === mealId)
       .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+      .map(ensurePortion)
     return { meal, items }
   }
   const { data: meal, error } = await getSupabase().from('meals').select('*').eq('id', mealId).eq('user_id', userId).maybeSingle()
@@ -488,7 +490,10 @@ export async function fetchMealWithItems(
     .eq('meal_id', mealId)
     .order('sort_order', { ascending: true })
   if (itemError) throw new Error(itemError.message)
-  return { meal: normalizeMeal(meal as Record<string, unknown>), items: (items ?? []) as MealItem[] }
+  return {
+    meal: normalizeMeal(meal as Record<string, unknown>),
+    items: ((items ?? []) as MealItem[]).map(ensurePortion),
+  }
 }
 
 type MealWrite = {
@@ -509,17 +514,25 @@ type MealWrite = {
 }
 
 function itemRows(mealId: string, items: MealItem[]) {
-  return items.map((item, index) => ({
-    meal_id: mealId,
-    name: item.name.trim(),
-    grams: item.grams,
-    calories: item.calories,
-    protein_g: item.protein_g,
-    fiber_g: item.fiber_g,
-    carbs_g: item.carbs_g,
-    fat_g: item.fat_g,
-    sort_order: index,
-  }))
+  return items.map((item, index) => {
+    const portion = ensurePortion(item)
+    return {
+      meal_id: mealId,
+      name: portion.name.trim(),
+      grams: portion.grams,
+      quantity: portion.quantity ?? 1,
+      unit: portion.unit ?? 'serving',
+      grams_per_unit: portion.grams_per_unit ?? null,
+      measures: portion.measures,
+      per_100g: portion.per_100g,
+      calories: portion.calories,
+      protein_g: portion.protein_g,
+      fiber_g: portion.fiber_g,
+      carbs_g: portion.carbs_g,
+      fat_g: portion.fat_g,
+      sort_order: index,
+    }
+  })
 }
 
 export async function createMeal(userId: string, input: MealWrite): Promise<{ id: string }> {
@@ -654,6 +667,7 @@ export async function fetchSavedMeals(userId: string): Promise<SavedMeal[]> {
     return readDb()
       .saved_meals.filter((m) => m.user_id === userId)
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      .map(hydrateSavedMeal)
   }
   const { data, error } = await getSupabase()
     .from('saved_meals')
@@ -661,7 +675,11 @@ export async function fetchSavedMeals(userId: string): Promise<SavedMeal[]> {
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
   if (error) throw new Error(error.message)
-  return (data ?? []) as SavedMeal[]
+  return ((data ?? []) as SavedMeal[]).map(hydrateSavedMeal)
+}
+
+function hydrateSavedMeal(meal: SavedMeal): SavedMeal {
+  return { ...meal, items: (meal.items ?? []).map(ensurePortion) }
 }
 
 export async function createSavedMeal(

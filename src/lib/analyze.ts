@@ -11,6 +11,9 @@ function blankItem(name: string): MealItem {
   return {
     name,
     grams: null,
+    quantity: 1,
+    unit: 'serving',
+    grams_per_unit: null,
     calories: 0,
     protein_g: 0,
     fiber_g: 0,

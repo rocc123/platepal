@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { itemFromHit, searchUsdaFoods, type FoodHit } from '../lib/foods'
+import { enrichUsdaHit, itemFromHit, searchUsdaFoods, type FoodHit } from '../lib/foods'
 import type { MealItem } from '../lib/types'
 
 export function FoodSearch({
@@ -12,6 +12,7 @@ export function FoodSearch({
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<FoodHit[]>([])
   const [loading, setLoading] = useState(false)
+  const [picking, setPicking] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -59,6 +60,7 @@ export function FoodSearch({
         />
       </label>
       {loading ? <p className="status">Searching…</p> : null}
+      {picking != null ? <p className="status">Loading household measures…</p> : null}
       {error && !loading ? <p className="status">{error}</p> : null}
       {hits.length ? (
         <ul className="hit-list">
@@ -67,10 +69,22 @@ export function FoodSearch({
               <button
                 type="button"
                 className="hit"
+                disabled={picking != null}
                 onClick={() => {
-                  onPick(itemFromHit(hit), hit)
-                  setQuery('')
-                  setHits([])
+                  void (async () => {
+                    setPicking(index)
+                    setError(null)
+                    try {
+                      const enriched = await enrichUsdaHit(hit)
+                      onPick(itemFromHit(enriched), enriched)
+                      setQuery('')
+                      setHits([])
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : 'USDA lookup failed.')
+                    } finally {
+                      setPicking(null)
+                    }
+                  })()
                 }}
               >
                 <strong>{hit.name}</strong>

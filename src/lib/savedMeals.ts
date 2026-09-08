@@ -1,3 +1,4 @@
+import { ensurePortion } from './portions'
 import type { MealItem, SavedMeal } from './types'
 
 function firstClause(value: string): string {
@@ -32,10 +33,10 @@ export function defaultSavedMealName(
 }
 
 export function itemsFromSavedMeal(saved: SavedMeal): MealItem[] {
-  const items = (saved.items ?? []).filter((item) => item.name.trim())
+  const items = (saved.items ?? []).filter((item) => item.name.trim()).map(ensurePortion)
   if (items.length) return items
   return [
-    {
+    ensurePortion({
       name: saved.name,
       grams: null,
       calories: saved.calories,
@@ -43,7 +44,7 @@ export function itemsFromSavedMeal(saved: SavedMeal): MealItem[] {
       fiber_g: saved.fiber_g,
       carbs_g: saved.carbs_g,
       fat_g: saved.fat_g,
-    },
+    }),
   ]
 }
 

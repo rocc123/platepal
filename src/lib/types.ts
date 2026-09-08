@@ -14,16 +14,30 @@ export type MealPeriodRow = {
   end_hour: number | null
 }
 
+export const PORTION_UNITS = ['serving', 'piece', 'cup', 'tbsp', 'tsp', 'oz', 'ml', 'g'] as const
+
+export type PortionUnit = (typeof PORTION_UNITS)[number]
+
+export type PortionMeasure = {
+  unit: PortionUnit
+  gramsPerUnit: number | null
+  label: string
+}
+
 export type MealItem = {
   id?: string
   name: string
   grams: number | null
+  quantity?: number | null
+  unit?: PortionUnit
+  grams_per_unit?: number | null
   calories: number
   protein_g: number
   fiber_g: number
   carbs_g: number
   fat_g: number
   sort_order?: number
+  measures?: PortionMeasure[]
   per_100g?: {
     calories: number
     protein_g: number
