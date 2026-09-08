@@ -59,6 +59,8 @@ export type Profile = {
   calorie_goal: number | null
 }
 
+export type AnalyzeScene = 'plated_meal' | 'recipe' | 'packaged' | 'mixed'
+
 export type AnalyzeResult = {
   items: MealItem[]
   totals: {
@@ -70,6 +72,8 @@ export type AnalyzeResult = {
   }
   confidence: number
   assumptions: string
+  title?: string
+  scene?: AnalyzeScene
 }
 
 export type SavedMeal = {

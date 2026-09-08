@@ -1,10 +1,11 @@
+import { normalizeAnalyzeResult, parseAnalyzeScene } from './analyzeGrouping'
+import { SYSTEM_PROMPT } from './analyzePrompt'
 import { getSupabase, usingLocalData } from './supabase'
 import type { AnalyzeRequest, AnalyzeResult, MealItem } from './types'
 
-const SYSTEM_PROMPT =
-  'Estimate visible or described foods for personal tracking. Priority: protein_g and fiber_g. Treat a user note as ground truth. Do not invent hidden oils or sauces. If unsure, lower confidence and still estimate.'
-
 export { SYSTEM_PROMPT }
+export const ANALYZE_IMAGE_MAX_EDGE = 768
+export const ANALYZE_JPEG_QUALITY = 0.72
 
 function blankItem(name: string): MealItem {
   return {
@@ -20,14 +21,15 @@ function blankItem(name: string): MealItem {
 
 function localEstimate(request: AnalyzeRequest): AnalyzeResult {
   const note = request.note?.trim()
-  const item = blankItem(note || (request.imageBase64 ? 'Meal from photo' : 'Meal'))
-  return {
-    items: [item],
+  const title = note || (request.imageBase64 ? 'Meal from photo' : 'Meal')
+  return normalizeAnalyzeResult({
+    items: [blankItem(title)],
     totals: { calories: 0, protein_g: 0, fiber_g: 0, carbs_g: 0, fat_g: 0 },
     confidence: 0,
+    title,
     assumptions:
       'Analyze is not configured on this device. Fill in protein and fiber, then save.',
-  }
+  })
 }
 
 export async function resizeImageToJpeg(file: File): Promise<{ base64: string; mimeType: 'image/jpeg' }> {
@@ -37,7 +39,7 @@ export async function resizeImageToJpeg(file: File): Promise<{ base64: string; m
 
   const bitmap = await createImageBitmap(file)
   const longEdge = Math.max(bitmap.width, bitmap.height)
-  const scale = longEdge > 384 ? 384 / longEdge : 1
+  const scale = longEdge > ANALYZE_IMAGE_MAX_EDGE ? ANALYZE_IMAGE_MAX_EDGE / longEdge : 1
   const width = Math.round(bitmap.width * scale)
   const height = Math.round(bitmap.height * scale)
 
@@ -53,7 +55,7 @@ export async function resizeImageToJpeg(file: File): Promise<{ base64: string; m
     canvas.toBlob(
       (next) => (next ? resolve(next) : reject(new Error('Could not encode the photo.'))),
       'image/jpeg',
-      0.55,
+      ANALYZE_JPEG_QUALITY,
     )
   })
 
@@ -69,7 +71,7 @@ function asAnalyzeResult(data: unknown): AnalyzeResult {
   const row = data as Partial<AnalyzeResult> & { error?: string }
   if (row.error) throw new Error(row.error)
   if (!Array.isArray(row.items) || !row.totals) throw new Error('Analyze returned an unexpected shape.')
-  return {
+  return normalizeAnalyzeResult({
     items: row.items.map((item) => ({
       name: String(item.name ?? ''),
       grams: item.grams == null ? null : Number(item.grams),
@@ -88,7 +90,9 @@ function asAnalyzeResult(data: unknown): AnalyzeResult {
     },
     confidence: Number(row.confidence ?? 0),
     assumptions: String(row.assumptions ?? ''),
-  }
+    title: typeof row.title === 'string' ? row.title : undefined,
+    scene: parseAnalyzeScene(row.scene),
+  })
 }
 
 function errorFromBody(data: unknown): string | null {

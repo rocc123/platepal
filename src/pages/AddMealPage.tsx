@@ -167,6 +167,7 @@ export function AddMealPage() {
       })
       setConfidence(result.confidence)
       setAssumptions(result.assumptions)
+      if (!note.trim() && result.title?.trim()) setNote(result.title.trim())
       setSourceId(sourceIdByCode(file ? 'photo' : 'text'))
       openReview(result.items.length ? result.items : [blankItem()])
     } catch (err) {
@@ -232,8 +233,8 @@ export function AddMealPage() {
           <p className="composer-kicker">Step 2 of 2</p>
           <h1>Check the numbers</h1>
           <p className="lede">
-            A food name is enough to save. Protein and fiber are what we track. Grams, calories, and
-            the rest are optional.
+            A food name is enough to save. Combine rows if a recipe or burger was split too far, or
+            add a side if it was lumped together.
           </p>
         </header>
         <MealEditor
@@ -291,7 +292,8 @@ export function AddMealPage() {
         <p className="composer-kicker">Step 1 of 2</p>
         <h1>What was on the plate?</h1>
         <p className="lede">
-          Repeat a saved meal, or start with a note or photo. Look up and barcode are extras.
+          Repeat a saved meal, or start with a note or photo. We name the dish the way you would say
+          it — a burger on lettuce stays one food, not a pile of leaves.
         </p>
 
         {items ? (
@@ -378,7 +380,10 @@ export function AddMealPage() {
 
         {helper === 'photo' ? (
           <div className="helper-panel">
-            <p className="helper-copy">A photo is enough on its own. Analyze will read the plate.</p>
+            <p className="helper-copy">
+              A photo is enough on its own. A plated meal or a recipe card both work — recipes log as
+              the finished dish, not one row per ingredient.
+            </p>
             <PhotoPicker previewUrl={previewUrl} onPick={pickFile} onClear={clearFile} />
           </div>
         ) : null}
@@ -430,7 +435,10 @@ export function AddMealPage() {
           {!canAnalyze ? (
             <p className="hint">Add a note or photo first — or skip analyze and type the numbers.</p>
           ) : (
-            <p className="hint">We estimate protein and fiber. You can edit every number on the next screen.</p>
+            <p className="hint">
+              We estimate protein and fiber, and keep composed dishes together. You can split or
+              combine foods on the next screen.
+            </p>
           )}
           <button type="button" className="text-action" disabled={analyzing} onClick={onManual}>
             Skip — I&apos;ll type protein and fiber

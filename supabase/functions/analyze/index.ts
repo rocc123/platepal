@@ -1,7 +1,41 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const SYSTEM_PROMPT =
-  'Estimate visible or described foods for personal tracking. Priority: protein_g and fiber_g. Treat a user note as ground truth. Do not invent hidden oils or sauces. If unsure, lower confidence and still estimate.'
+const SYSTEM_PROMPT = `You estimate nutrition from a meal photo and/or a short user note for personal protein and fiber tracking.
+
+Name foods the way a person would say them at the table.
+Good: "Turkey burger on lettuce", "Chicken rice bowl", "Overnight oats with berries"
+Bad: "lettuce leaves", "ground beef, bun, tomato", "LETTUCE, GREEN, RAW"
+
+Look at the whole scene, not the largest patch of color. A burger sitting on lettuce is a burger. Garnish and the thing under the food are how it is served, not the meal.
+
+Grouping — log how someone would edit the numbers, not a grocery list:
+- One composed dish (burger, sandwich, taco, bowl, soup, stir-fry, salad-as-a-meal): one item. Put toppings in assumptions.
+- Distinct foods on a plate you would weigh separately (chicken, rice, broccoli): one item each, usually 2–4.
+- A recipe card, cookbook page, screenshot, or ingredient list: the finished dish for one typical serving. A clear side can be a second item. Never one row per ingredient.
+- Drinks and obvious sides stay separate. Sauce on the dish folds into the dish.
+
+If a user note is present, treat it as ground truth for what was eaten.
+Do not invent hidden oils or sauces unless they are visible or mentioned.
+If unsure, lower confidence and still estimate.
+
+Also return:
+- title: everyday name for the whole plate or recipe
+- scene: plated_meal, recipe, packaged, or mixed
+- assumptions: portions plus why you grouped this way
+Prefer 1–3 items. Never more than 6. Priority: protein_g and fiber_g.`
+
+const ANALYZE_SCENES = ['plated_meal', 'recipe', 'packaged', 'mixed'] as const
+
+function analyzeUserText(note: string | undefined, hasImage: boolean): string {
+  const lines = [
+    hasImage
+      ? 'Look at the whole photo, not just the largest color. Name the meal the way a person would say it.'
+      : 'Name the foods the way a person would say them.',
+    'Group a composed dish or recipe as one food. Split only distinct plate components you would edit separately.',
+  ]
+  if (note) lines.push(`User note (ground truth): ${note}`)
+  return lines.join('\n')
+}
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -86,8 +120,10 @@ const RESPONSE_SCHEMA = {
     },
     confidence: { type: 'NUMBER' },
     assumptions: { type: 'STRING' },
+    title: { type: 'STRING' },
+    scene: { type: 'STRING', enum: [...ANALYZE_SCENES] },
   },
-  required: ['items', 'confidence'],
+  required: ['items', 'confidence', 'title', 'scene'],
 }
 
 function configuredModels() {
@@ -150,8 +186,8 @@ async function callGemini(geminiKey: string, model: string, parts: Array<Record<
         responseMimeType: 'application/json',
         responseSchema: RESPONSE_SCHEMA,
         thinkingConfig: { thinkingLevel: 'MINIMAL' },
-        mediaResolution: 'MEDIA_RESOLUTION_LOW',
-        maxOutputTokens: 512,
+        mediaResolution: 'MEDIA_RESOLUTION_MEDIUM',
+        maxOutputTokens: 1024,
       },
     }),
   })
@@ -181,6 +217,8 @@ async function callGemini(geminiKey: string, model: string, parts: Array<Record<
     items?: Array<Record<string, unknown>>
     confidence?: number
     assumptions?: string
+    title?: string
+    scene?: string
   }
 }
 
@@ -267,21 +305,26 @@ async function handleAnalyze(req: Request) {
   const geminiKey = Deno.env.get('GEMINI_API_KEY')
   if (!geminiKey) return json({ error: 'GEMINI_API_KEY is not set' }, 500)
 
-  const parts: Array<Record<string, unknown>> = []
-  if (note) parts.push({ text: note })
+  const parts: Array<Record<string, unknown>> = [
+    { text: analyzeUserText(note, Boolean(imageBase64)) },
+  ]
   if (imageBase64) {
     parts.push({
       inline_data: {
         mime_type: body.mimeType === 'image/webp' ? 'image/webp' : 'image/jpeg',
         data: imageBase64,
       },
-      mediaResolution: { level: 'MEDIA_RESOLUTION_LOW' },
+      mediaResolution: { level: 'MEDIA_RESOLUTION_MEDIUM' },
     })
   }
 
   const parsed = await generateNutrition(geminiKey, parts)
+  const scene = ANALYZE_SCENES.includes(parsed.scene as (typeof ANALYZE_SCENES)[number])
+    ? parsed.scene
+    : undefined
+  const title = String(parsed.title ?? '').trim()
 
-  const items = (parsed.items ?? []).map((item) => ({
+  let items = (parsed.items ?? []).map((item) => ({
     name: String(item.name ?? ''),
     grams: item.grams == null || item.grams === '' ? null : Number(item.grams),
     calories: roundNutrition(Number(item.calories ?? 0), true),
@@ -289,7 +332,13 @@ async function handleAnalyze(req: Request) {
     fiber_g: roundNutrition(Number(item.fiber_g ?? 0)),
     carbs_g: roundNutrition(Number(item.carbs_g ?? 0)),
     fat_g: roundNutrition(Number(item.fat_g ?? 0)),
-  }))
+  })).filter((item) => item.name.trim())
+
+  if ((scene === 'recipe' || scene === 'packaged') && items.length > 2) {
+    items = [sumNamedItems(items, title || items[0]?.name || 'Meal')]
+  } else if (items.length > 6) {
+    items = [...items.slice(0, 5), sumNamedItems(items.slice(5), 'Other foods')]
+  }
 
   const totals = items.reduce(
     (acc, item) => {
@@ -303,6 +352,12 @@ async function handleAnalyze(req: Request) {
     { calories: 0, protein_g: 0, fiber_g: 0, carbs_g: 0, fat_g: 0 },
   )
 
+  const assumptions = String(parsed.assumptions ?? '')
+  const grouping =
+    scene === 'recipe'
+      ? 'Read as a recipe, so this is the finished dish — not a row per ingredient.'
+      : ''
+
   return json({
     items,
     totals: {
@@ -313,6 +368,51 @@ async function handleAnalyze(req: Request) {
       fat_g: roundNutrition(totals.fat_g),
     },
     confidence: Math.min(1, Math.max(0, Number(parsed.confidence ?? 0))),
-    assumptions: String(parsed.assumptions ?? ''),
+    assumptions: [grouping, assumptions].filter(Boolean).join(' '),
+    title: title || (items.length === 1 ? items[0].name : ''),
+    scene: scene ?? 'mixed',
   })
+}
+
+function sumNamedItems(
+  items: Array<{
+    name: string
+    grams: number | null
+    calories: number
+    protein_g: number
+    fiber_g: number
+    carbs_g: number
+    fat_g: number
+  }>,
+  name: string,
+) {
+  const merged = items.reduce(
+    (acc, item) => {
+      acc.grams =
+        item.grams == null ? acc.grams : acc.grams == null ? item.grams : acc.grams + item.grams
+      acc.calories += item.calories
+      acc.protein_g += item.protein_g
+      acc.fiber_g += item.fiber_g
+      acc.carbs_g += item.carbs_g
+      acc.fat_g += item.fat_g
+      return acc
+    },
+    {
+      name,
+      grams: null as number | null,
+      calories: 0,
+      protein_g: 0,
+      fiber_g: 0,
+      carbs_g: 0,
+      fat_g: 0,
+    },
+  )
+  return {
+    ...merged,
+    calories: roundNutrition(merged.calories, true),
+    protein_g: roundNutrition(merged.protein_g),
+    fiber_g: roundNutrition(merged.fiber_g),
+    carbs_g: roundNutrition(merged.carbs_g),
+    fat_g: roundNutrition(merged.fat_g),
+  }
 }

@@ -54,7 +54,7 @@ export function FoodSearch({
           type="text"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="chicken breast, oats, lentils"
+          placeholder="chicken breast, oats, leftover chili"
           autoComplete="off"
         />
       </label>

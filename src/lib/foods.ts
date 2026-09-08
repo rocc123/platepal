@@ -1,3 +1,4 @@
+import { humanizeFoodName } from './foodNames'
 import { roundNutrition, type NutritionTotals } from './totals'
 import type { MealItem } from './types'
 
@@ -87,7 +88,7 @@ export async function searchUsdaFoods(query: string): Promise<FoodHit[]> {
     const unit = String(food.servingSizeUnit ?? '').toLowerCase()
     const grams = serving > 0 && (unit === 'g' || unit === 'ml' || unit === 'grm') ? serving : 100
     const brand = String(food.brandName || food.brandOwner || '').trim()
-    const description = String(food.description || 'Food').trim()
+    const description = humanizeFoodName(String(food.description || 'Food'))
     return {
       name: description,
       detail: [brand, food.dataType, grams === 100 ? 'per 100g' : `${grams}g serving`]

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { FoodSearch } from './FoodSearch'
 import { MealWhen } from './MealWhen'
+import { mergeMealItems } from '../lib/analyzeGrouping'
 import { scaleFrom100g } from '../lib/foods'
 import type { Lookups } from '../lib/lookups'
 import { formatFocusLine, formatOtherLine, sumItems } from '../lib/totals'
@@ -150,6 +151,18 @@ export function MealEditor({
         {items.length === 0 ? (
           <p className="muted">No foods yet. Add one below — a name is enough.</p>
         ) : null}
+        {items.filter((row) => row.name.trim()).length > 1 ? (
+          <button
+            type="button"
+            className="text-action combine-all"
+            onClick={() => {
+              const named = items.filter((row) => row.name.trim())
+              onItemsChange([mergeMealItems(named, note.trim() || undefined)])
+            }}
+          >
+            Combine into one food
+          </button>
+        ) : null}
         {items.map((item, index) => (
           <div className="item-card" key={item.id ?? index}>
             <label className="field">
@@ -231,20 +244,37 @@ export function MealEditor({
                 </label>
               </div>
             </details>
-            <button
-              type="button"
-              className="text-back"
-              onClick={() => onItemsChange(items.filter((_, i) => i !== index))}
-            >
-              Remove
-            </button>
+            <div className="item-actions">
+              {index > 0 ? (
+                <button
+                  type="button"
+                  className="text-back combine"
+                  onClick={() => {
+                    const merged = mergeMealItems([items[index - 1], item])
+                    onItemsChange([...items.slice(0, index - 1), merged, ...items.slice(index + 1)])
+                  }}
+                >
+                  Combine with food above
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="text-back"
+                onClick={() => onItemsChange(items.filter((_, i) => i !== index))}
+              >
+                Remove
+              </button>
+            </div>
           </div>
         ))}
       </div>
 
       {adding ? (
         <div className="add-food-panel">
-          <p className="helper-copy">Look up another food, or add a blank row to type it.</p>
+          <p className="helper-copy">
+            Look up another food, or add a blank row. A composed dish can stay one food — combine rows
+            if analyze split it too far.
+          </p>
           <FoodSearch
             label="Search USDA"
             onPick={(item) => {
