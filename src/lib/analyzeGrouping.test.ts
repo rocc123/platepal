@@ -70,6 +70,8 @@ describe('analyze grouping', () => {
     )
     assert.equal(next.items.length, 1)
     assert.equal(next.title, 'Turkey burger on lettuce')
+    assert.equal(next.items[0]?.unit, 'serving')
+    assert.equal(next.items[0]?.quantity, 1)
     assert.match(next.assumptions, /Named the dish/)
   })
 

@@ -1,3 +1,4 @@
+import { asAnalyzedServing } from './portions.ts'
 import { sumItems } from './totals.ts'
 import type { AnalyzeResult, AnalyzeScene, MealItem } from './types.ts'
 
@@ -20,11 +21,11 @@ export function mergeMealItems(items: MealItem[], name?: string): MealItem {
       .map((item) => item.name.trim())
       .filter(Boolean)
       .join(' + ') || 'Meal'
-  return {
+  return asAnalyzedServing({
     name: name?.trim() || fallback,
     grams,
     ...sumItems(rows),
-  }
+  })
 }
 
 function groupingHint(
@@ -64,6 +65,8 @@ export function normalizeAnalyzeResult(result: AnalyzeResult): AnalyzeResult {
   } else if (items.length > 6) {
     items = [...items.slice(0, 5), mergeMealItems(items.slice(5), 'Other foods')]
   }
+
+  items = items.map(asAnalyzedServing)
 
   return {
     ...result,

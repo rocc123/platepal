@@ -31,7 +31,7 @@ VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
 ```
 
-2. In the Supabase project, run `supabase/migrations/0001_init.sql`, then `0002_lookups_and_timezone.sql`, then `0003_meal_duration.sql`.
+2. In the Supabase project, run `supabase/migrations/0001_init.sql`, then `0002_lookups_and_timezone.sql`, then `0003_meal_duration.sql`, then `0004_portion_units.sql`.
 3. Turn on email OTP. The Magic Link template must use `{{ .Token }}` (a code), not `{{ .ConfirmationURL }}` (a link). Home screen apps cannot sign in from an email link. Google OAuth is optional. Add the Vite origin, `/login`, and the production host to Site URL + Redirect URLs.
 4. Deploy the `analyze` Edge Function and set secrets:
 
@@ -70,7 +70,7 @@ Or do it from an existing clone:
 1. Import [github.com/rocc123/platepal](https://github.com/rocc123/platepal) at [vercel.com/new](https://vercel.com/new). Framework **Vite**, build `npm run build`, output `dist`.
 2. In the Vercel project: **Storage → Create Database → Supabase** (or `npx vercel integration add supabase` after `npx vercel link`).
 3. Marketplace syncs `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. The Vite build maps those onto the client automatically. Redeploy after the database is connected — Vite bakes public keys in at **build** time.
-4. Open **Supabase Studio** from the Vercel Storage page. In the SQL Editor, run `supabase/migrations/0001_init.sql`, then `0002_lookups_and_timezone.sql`, then `0003_meal_duration.sql`.
+4. Open **Supabase Studio** from the Vercel Storage page. In the SQL Editor, run `supabase/migrations/0001_init.sql`, then `0002_lookups_and_timezone.sql`, then `0003_meal_duration.sql`, then `0004_portion_units.sql`.
 5. **Authentication → Providers → Email**: leave magic link / OTP on.
 6. **Authentication → Email Templates → Magic Link**: use `{{ .Token }}` only. Do not include `{{ .ConfirmationURL }}`. Email links open in the browser and will not sign the installed PWA in. The live project template is in `supabase/templates/magic_link.html`.
 7. **Authentication → URL Configuration**:

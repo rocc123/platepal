@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { AddFoodPanel } from './AddFoodPanel'
 import { MealWhen } from './MealWhen'
+import { PortionField } from './PortionField'
 import { mergeMealItems } from '../lib/analyzeGrouping'
-import { scaleFrom100g } from '../lib/foods'
 import { appendMealItems, namedMealItems } from '../lib/mealItems'
 import type { Lookups } from '../lib/lookups'
+import { formatPortion, setItemGrams, setItemMeasure, setItemQuantity } from '../lib/portions'
 import { formatFocusLine, formatOtherLine, sumItems } from '../lib/totals'
 import type { MealItem } from '../lib/types'
 
@@ -51,11 +52,12 @@ function parseGrams(value: string): number | null {
 
 function extrasPreview(item: MealItem): string {
   const bits: string[] = []
-  if (item.grams != null) bits.push(`${item.grams}g`)
+  const portion = formatPortion(item)
+  if (portion && portion !== 'Add a portion') bits.push(portion)
   if (item.calories) bits.push(`${item.calories} cal`)
   if (item.carbs_g) bits.push(`${item.carbs_g}g carbs`)
   if (item.fat_g) bits.push(`${item.fat_g}g fat`)
-  return bits.length ? bits.join(' · ') : 'Add portion, calories, carbs, or fat'
+  return bits.length ? bits.join(' · ') : 'Add calories, carbs, or fat'
 }
 
 export function MealEditor({
@@ -94,13 +96,13 @@ export function MealEditor({
     onItemsChange(
       items.map((item, i) => {
         if (i !== index) return item
-        const next = { ...item, ...patch }
-        if (patch.grams != null && item.per_100g) {
-          return { ...next, ...scaleFrom100g(item.per_100g, patch.grams) }
-        }
-        return next
+        return { ...item, ...patch }
       }),
     )
+  }
+
+  function updatePortion(index: number, next: MealItem) {
+    onItemsChange(items.map((item, i) => (i === index ? next : item)))
   }
 
   return (
@@ -125,7 +127,7 @@ export function MealEditor({
         <textarea
           value={note}
           onChange={(event) => onNoteChange(event.target.value)}
-          placeholder="200g chicken + broccoli"
+          placeholder="1/3 cup oats + 2 eggs"
         />
       </label>
 
@@ -163,6 +165,11 @@ export function MealEditor({
                 placeholder="Chicken breast"
               />
             </label>
+            <PortionField
+              item={item}
+              onQuantityChange={(quantity) => updatePortion(index, setItemQuantity(item, quantity))}
+              onMeasureChange={(measure) => updatePortion(index, setItemMeasure(item, measure))}
+            />
             <div className="item-grid tracked-grid">
               <label className="field">
                 <span>Protein g</span>
@@ -198,7 +205,7 @@ export function MealEditor({
                     inputMode="decimal"
                     value={item.grams ?? ''}
                     placeholder="—"
-                    onChange={(event) => updateItem(index, { grams: parseGrams(event.target.value) })}
+                    onChange={(event) => updatePortion(index, setItemGrams(item, parseGrams(event.target.value)))}
                   />
                 </label>
                 <label className="field">

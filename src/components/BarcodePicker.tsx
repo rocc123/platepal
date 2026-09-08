@@ -6,7 +6,7 @@ import {
   openBarcodeCamera,
   waitForVideoFrame,
 } from '../lib/barcode'
-import { itemFromHit, lookupBarcode } from '../lib/foods'
+import { itemFromHit, lookupBarcode, portionAssumption } from '../lib/foods'
 import type { MealItem } from '../lib/types'
 
 export function BarcodePicker({ onPick }: { onPick: (item: MealItem, assumptions: string) => void }) {
@@ -84,7 +84,7 @@ export function BarcodePicker({ onPick }: { onPick: (item: MealItem, assumptions
       const hit = await lookupBarcode(raw)
       onPick(
         itemFromHit(hit),
-        `Open Food Facts, per ${hit.grams}g. Edit if your portion is different.`,
+        portionAssumption('Open Food Facts', hit),
       )
       setCode('')
       setScanning(false)

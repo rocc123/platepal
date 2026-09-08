@@ -17,6 +17,7 @@ Grouping — log how someone would edit the numbers, not a grocery list:
 If a user note is present, treat it as ground truth for what was eaten.
 Do not invent hidden oils or sauces unless they are visible or mentioned.
 If unsure, lower confidence and still estimate.
+Estimate grams for the amount shown or mentioned. The app treats that as 1 serving so the user can change it to 2 servings or 1/3 cup later. Do not invent household units.
 
 Also return:
 - title: everyday name for the whole plate or recipe

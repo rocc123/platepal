@@ -21,6 +21,7 @@ import { DEFAULT_MEAL_DURATION_MINUTES, parseDurationMinutes } from '../lib/fast
 import { getLookups, periodById, sourceIdByCode } from '../lib/lookups'
 import { appendMealItems, blankMealItem } from '../lib/mealItems'
 import { defaultSavedMealName, itemsFromSavedMeal } from '../lib/savedMeals'
+import { portionAssumption } from '../lib/foods'
 import { createMeal, createSavedMeal, fetchSavedMeals, loadLookups } from '../lib/supabase'
 import { sumItems } from '../lib/totals'
 import type { MealItem, SavedMeal } from '../lib/types'
@@ -379,7 +380,7 @@ export function AddMealPage() {
                   items: [item],
                   note: note.trim() || item.name,
                   confidence: 0.7,
-                  assumptions: `USDA FoodData Central, per ${hit.grams}g. Edit if your portion is different.`,
+                  assumptions: portionAssumption('USDA FoodData Central', hit),
                   sourceCode: 'manual',
                 })
               }}
