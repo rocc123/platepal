@@ -85,6 +85,7 @@ describe('scaling a portion', () => {
     assert.equal(two.grams, 200)
     assert.equal(two.protein_g, 24)
     assert.match(formatPortion(two), /2 servings/)
+    assert.equal(formatPortion(setItemQuantity(one, 1 / 3)), '1/3 serving · 33.3g')
   })
 
   it('keeps grams when switching from a serving to a cup', () => {

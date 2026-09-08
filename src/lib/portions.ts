@@ -130,7 +130,7 @@ export function pluralUnit(unit: PortionUnit, quantity: number | null | undefine
   const label = unitLabel(unit)
   if (unit === 'g' || unit === 'ml' || unit === 'oz' || unit === 'tbsp' || unit === 'tsp') return label
   const n = quantity ?? 1
-  if (Math.abs(n - 1) < 0.001) return label
+  if (n <= 1 + 0.001) return label
   if (unit === 'serving') return 'servings'
   if (unit === 'piece') return 'pieces'
   if (unit === 'cup') return 'cups'
