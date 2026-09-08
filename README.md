@@ -104,7 +104,7 @@ Netlify works too: same `dist` output, and `public/_redirects` is already in the
 - Sign in (email code, optional Google, or local email)
 - Today: protein bar, fiber bar, current fast, meals for the local calendar day
 - Add / edit / delete meals, with a 15-minute eating duration so fasting starts when the meal ends
-- Analyze a photo or note (or enter a meal by hand)
+- Analyze a photo or note (or enter a meal by hand). Photos of plates and recipes are named as a dish, not a grocery list.
 - Saved meal templates
 - Settings for name and goals
 - Basic PWA shell (Add to Home Screen)

@@ -280,51 +280,13 @@ type AnalyzeRequest = {
 At least one of `note` or `imageBase64` is required.
 
 **Before upload, the client must:**
-- resize the image so the long edge is <= 384px
-- encode JPEG quality ~0.55
+- resize the image so the long edge is <= 768px
+- encode JPEG quality ~0.72
 - skip upload if the file is not an image
 
-**Gemini system prompt (use this text):**
+**Gemini system prompt:** use the text in `src/lib/analyzePrompt.ts` (keep the Edge Function copy in sync). Name dishes the way a person would say them. Group composed dishes and recipe cards as one food; split only distinct plate components.
 
-```
-You estimate nutrition from a meal photo and/or a short user note for personal tracking.
-
-Priority: protein_g and fiber_g. Also return calories, carbs_g, fat_g.
-
-Rules:
-- Identify each visible or described food.
-- Estimate portion in grams.
-- If a user note is present, treat it as ground truth for ingredients and portions.
-- Do not invent hidden oils, butter, or sauces unless they are visible or mentioned.
-- If unsure, lower confidence and still give a best estimate.
-- Return JSON only. No markdown.
-
-JSON shape:
-{
-  "items": [
-    {
-      "name": "string",
-      "grams": number,
-      "calories": number,
-      "protein_g": number,
-      "fiber_g": number,
-      "carbs_g": number,
-      "fat_g": number
-    }
-  ],
-  "totals": {
-    "calories": number,
-    "protein_g": number,
-    "fiber_g": number,
-    "carbs_g": number,
-    "fat_g": number
-  },
-  "confidence": number,
-  "assumptions": "short string"
-}
-```
-
-`confidence` is 0–1. `totals` must equal the sum of items (round to 1 decimal for grams, 0 for calories is fine).
+JSON also includes `title` (everyday plate name) and `scene` (`plated_meal` | `recipe` | `packaged` | `mixed`). `confidence` is 0–1. `totals` must equal the sum of items (round to 1 decimal for grams, 0 for calories is fine).
 
 **Response to the client:** that same JSON. On failure return `{ error: string }` with HTTP 400/401/500 as appropriate.
 

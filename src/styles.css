@@ -442,6 +442,23 @@ textarea {
   font-weight: 500;
 }
 
+.item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.item-card .text-back.combine,
+.combine-all {
+  color: var(--fiber);
+  text-align: left;
+}
+
+.combine-all {
+  justify-self: start;
+  min-height: 36px;
+}
+
 .item-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
