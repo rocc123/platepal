@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { FoodSearch } from './FoodSearch'
+import { AddFoodPanel } from './AddFoodPanel'
 import { MealWhen } from './MealWhen'
 import { mergeMealItems } from '../lib/analyzeGrouping'
 import { scaleFrom100g } from '../lib/foods'
+import { appendMealItems, namedMealItems } from '../lib/mealItems'
 import type { Lookups } from '../lib/lookups'
 import { formatFocusLine, formatOtherLine, sumItems } from '../lib/totals'
 import type { MealItem } from '../lib/types'
@@ -35,18 +36,6 @@ type MealEditorProps = {
   onCancel: () => void
   onDelete?: () => void
   onSaveAsSavedMeal?: () => void
-}
-
-function emptyItem(): MealItem {
-  return {
-    name: '',
-    grams: null,
-    calories: 0,
-    protein_g: 0,
-    fiber_g: 0,
-    carbs_g: 0,
-    fat_g: 0,
-  }
 }
 
 function parseNumber(value: string): number {
@@ -270,35 +259,13 @@ export function MealEditor({
       </div>
 
       {adding ? (
-        <div className="add-food-panel">
-          <p className="helper-copy">
-            Look up another food, or add a blank row. A composed dish can stay one food — combine rows
-            if analyze split it too far.
-          </p>
-          <FoodSearch
-            label="Search USDA"
-            onPick={(item) => {
-              const named = items.filter((row) => row.name.trim())
-              onItemsChange(named.length ? [...named, item] : [item])
-              setAdding(false)
-            }}
-          />
-          <div className="row-actions two">
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => {
-                onItemsChange([...items, emptyItem()])
-                setAdding(false)
-              }}
-            >
-              Blank row
-            </button>
-            <button type="button" className="btn-secondary" onClick={() => setAdding(false)}>
-              Close
-            </button>
-          </div>
-        </div>
+        <AddFoodPanel
+          onAdd={(next) => {
+            onItemsChange(appendMealItems(namedMealItems(items), next))
+            setAdding(false)
+          }}
+          onClose={() => setAdding(false)}
+        />
       ) : (
         <button type="button" className="btn-secondary" onClick={() => setAdding(true)}>
           Add another food

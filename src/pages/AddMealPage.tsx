@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { BarcodePicker } from '../components/BarcodePicker'
 import { FoodSearch } from '../components/FoodSearch'
 import { MealEditor } from '../components/MealEditor'
+import { MethodRow, type Helper } from '../components/MethodRow'
 import { PhotoPicker } from '../components/PhotoPicker'
 import { SavedMealPicker } from '../components/SavedMealPicker'
 import { useUser } from '../components/AuthGate'
@@ -18,25 +19,13 @@ import {
 } from '../lib/dates'
 import { DEFAULT_MEAL_DURATION_MINUTES, parseDurationMinutes } from '../lib/fasting'
 import { getLookups, periodById, sourceIdByCode } from '../lib/lookups'
+import { appendMealItems, blankMealItem } from '../lib/mealItems'
 import { defaultSavedMealName, itemsFromSavedMeal } from '../lib/savedMeals'
 import { createMeal, createSavedMeal, fetchSavedMeals, loadLookups } from '../lib/supabase'
 import { sumItems } from '../lib/totals'
 import type { MealItem, SavedMeal } from '../lib/types'
 
 type Step = 'capture' | 'review'
-type Helper = 'photo' | 'search' | 'barcode' | null
-
-function blankItem(): MealItem {
-  return {
-    name: '',
-    grams: null,
-    calories: 0,
-    protein_g: 0,
-    fiber_g: 0,
-    carbs_g: 0,
-    fat_g: 0,
-  }
-}
 
 export function AddMealPage() {
   const user = useUser()
@@ -50,7 +39,7 @@ export function AddMealPage() {
   const initialWhen = defaultWhenForDay(day)
   const [lookups, setLookupsState] = useState(getLookups)
   const [step, setStep] = useState<Step>('capture')
-  const [helper, setHelper] = useState<Helper>(null)
+  const [helper, setHelper] = useState<Helper | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [note, setNote] = useState('')
@@ -113,6 +102,25 @@ export function AddMealPage() {
     setHelper((current) => (current === next ? null : next))
   }
 
+  function applyFirstEstimate(patch: {
+    items: MealItem[]
+    note?: string
+    confidence?: number | null
+    assumptions?: string
+    sourceCode?: 'photo' | 'text' | 'saved' | 'manual'
+  }) {
+    const addingToExisting = Boolean(items?.some((item) => item.name.trim()))
+    if (!addingToExisting) {
+      if (patch.note != null) setNote(patch.note)
+      if (patch.confidence !== undefined) setConfidence(patch.confidence)
+      if (patch.assumptions != null) setAssumptions(patch.assumptions)
+      if (patch.sourceCode) setSourceId(sourceIdByCode(patch.sourceCode))
+    }
+    setItems((current) => appendMealItems(current, patch.items))
+    setStep('review')
+    setError(null)
+  }
+
   function pickFile(next: File) {
     if (previewUrl) URL.revokeObjectURL(previewUrl)
     setFile(next)
@@ -135,19 +143,15 @@ export function AddMealPage() {
     }
   }
 
-  function openReview(nextItems: MealItem[]) {
-    setItems(nextItems)
-    setStep('review')
-    setError(null)
-  }
-
   function applySavedMeal(saved: SavedMeal) {
-    setNote((current) => current.trim() || saved.note || saved.name)
-    setConfidence(null)
-    setAssumptions(`From saved meal “${saved.name}”. Edit anything before you log it.`)
-    setSourceId(sourceIdByCode('saved'))
-    setSaveAsSavedMeal(false)
-    openReview(itemsFromSavedMeal(saved))
+    applyFirstEstimate({
+      items: itemsFromSavedMeal(saved),
+      note: note.trim() || saved.note || saved.name,
+      confidence: null,
+      assumptions: `From saved meal “${saved.name}”. Edit anything before you log it.`,
+      sourceCode: 'saved',
+    })
+    if (!items?.some((item) => item.name.trim())) setSaveAsSavedMeal(false)
   }
 
   async function onAnalyze() {
@@ -165,11 +169,13 @@ export function AddMealPage() {
         imageBase64,
         mimeType: imageBase64 ? 'image/jpeg' : undefined,
       })
-      setConfidence(result.confidence)
-      setAssumptions(result.assumptions)
-      if (!note.trim() && result.title?.trim()) setNote(result.title.trim())
-      setSourceId(sourceIdByCode(file ? 'photo' : 'text'))
-      openReview(result.items.length ? result.items : [blankItem()])
+      applyFirstEstimate({
+        items: result.items.length ? result.items : [blankMealItem()],
+        note: !note.trim() && result.title?.trim() ? result.title.trim() : undefined,
+        confidence: result.confidence,
+        assumptions: result.assumptions,
+        sourceCode: file ? 'photo' : 'text',
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analyze failed.')
     } finally {
@@ -178,10 +184,17 @@ export function AddMealPage() {
   }
 
   function onManual() {
-    setConfidence(null)
-    setAssumptions('')
-    setSourceId(sourceIdByCode('manual'))
-    openReview([note.trim() ? { ...blankItem(), name: note.trim() } : blankItem()])
+    if (items) {
+      setStep('review')
+      setError(null)
+      return
+    }
+    applyFirstEstimate({
+      items: [note.trim() ? { ...blankMealItem(), name: note.trim() } : blankMealItem()],
+      confidence: null,
+      assumptions: '',
+      sourceCode: 'manual',
+    })
   }
 
   async function onSave() {
@@ -337,46 +350,14 @@ export function AddMealPage() {
           />
         </label>
 
-        <div className="method-row" role="group" aria-label="Optional helpers">
-          <button
-            type="button"
-            className={helper === 'photo' || file ? 'method-tile on' : 'method-tile'}
-            aria-pressed={helper === 'photo'}
-            onClick={() => toggleHelper('photo')}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
-              <path d="M4 8.5h3l1.4-2h7.2l1.4 2H20a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 20 19.5H4A1.5 1.5 0 0 1 2.5 18v-8A1.5 1.5 0 0 1 4 8.5Z" />
-              <circle cx="12" cy="13.2" r="2.6" />
-            </svg>
-            <strong>Photo</strong>
-            <span>{file ? 'Added' : 'Optional'}</span>
-          </button>
-          <button
-            type="button"
-            className={helper === 'search' ? 'method-tile on' : 'method-tile'}
-            aria-pressed={helper === 'search'}
-            onClick={() => toggleHelper('search')}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
-              <circle cx="11" cy="11" r="6" />
-              <path d="M16 16l4.5 4.5" strokeLinecap="round" />
-            </svg>
-            <strong>Look up</strong>
-            <span>Optional</span>
-          </button>
-          <button
-            type="button"
-            className={helper === 'barcode' ? 'method-tile on' : 'method-tile'}
-            aria-pressed={helper === 'barcode'}
-            onClick={() => toggleHelper('barcode')}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
-              <path d="M5 6v12M8 6v12M10 6v12M13 6v12M15.5 6v12M19 6v12" strokeLinecap="round" />
-            </svg>
-            <strong>Barcode</strong>
-            <span>Optional</span>
-          </button>
-        </div>
+        {namedCount > 0 ? (
+          <p className="helper-copy">
+            Photo, lookup, and barcode add another food to this meal. They do not replace what you
+            already have.
+          </p>
+        ) : null}
+
+        <MethodRow helper={helper} fileAdded={Boolean(file)} onToggle={toggleHelper} />
 
         {helper === 'photo' ? (
           <div className="helper-panel">
@@ -394,11 +375,13 @@ export function AddMealPage() {
             <FoodSearch
               label="Search USDA"
               onPick={(item, hit) => {
-                setNote((current) => current.trim() || item.name)
-                setConfidence(0.7)
-                setAssumptions(`USDA FoodData Central, per ${hit.grams}g. Edit if your portion is different.`)
-                setSourceId(sourceIdByCode('manual'))
-                openReview([item])
+                applyFirstEstimate({
+                  items: [item],
+                  note: note.trim() || item.name,
+                  confidence: 0.7,
+                  assumptions: `USDA FoodData Central, per ${hit.grams}g. Edit if your portion is different.`,
+                  sourceCode: 'manual',
+                })
               }}
             />
           </div>
@@ -411,11 +394,13 @@ export function AddMealPage() {
             </p>
             <BarcodePicker
               onPick={(item, nextAssumptions) => {
-                setNote((current) => current.trim() || item.name)
-                setConfidence(0.8)
-                setAssumptions(nextAssumptions)
-                setSourceId(sourceIdByCode('manual'))
-                openReview([item])
+                applyFirstEstimate({
+                  items: [item],
+                  note: note.trim() || item.name,
+                  confidence: 0.8,
+                  assumptions: nextAssumptions,
+                  sourceCode: 'manual',
+                })
               }}
             />
           </div>
@@ -441,7 +426,7 @@ export function AddMealPage() {
             </p>
           )}
           <button type="button" className="text-action" disabled={analyzing} onClick={onManual}>
-            Skip — I&apos;ll type protein and fiber
+            {items ? 'Back to the numbers' : 'Skip — I’ll type protein and fiber'}
           </button>
         </div>
       </section>
