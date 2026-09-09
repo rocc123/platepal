@@ -391,14 +391,16 @@ export function AddMealPage() {
         {helper === 'barcode' ? (
           <div className="helper-panel">
             <p className="helper-copy">
-              Scan with the camera, take a barcode photo, or type the number. That also skips analyze.
+              Scan with the camera, take a barcode photo, or type the number. That also skips
+              analyze. Check the serving — crowd-sourced labels often use 100g or the whole
+              package.
             </p>
             <BarcodePicker
-              onPick={(item, nextAssumptions) => {
+              onPick={(item, nextAssumptions, confidence) => {
                 applyFirstEstimate({
                   items: [item],
                   note: note.trim() || item.name,
-                  confidence: 0.8,
+                  confidence,
                   assumptions: nextAssumptions,
                   sourceCode: 'manual',
                 })

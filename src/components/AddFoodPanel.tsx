@@ -104,7 +104,8 @@ export function AddFoodPanel({
       {helper === 'barcode' ? (
         <div className="helper-panel nested">
           <p className="helper-copy">
-            Scan with the camera, take a barcode photo, or type the number.
+            Scan with the camera, take a barcode photo, or type the number. Check the serving
+            before you save.
           </p>
           <BarcodePicker
             onPick={(item) => {

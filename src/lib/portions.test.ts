@@ -1,6 +1,17 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { itemFromHit, mergeUsdaPortions, hitFromOffProduct, hitFromUsdaSearchFood } from './foods.ts'
+import {
+  barcodeLookupCodes,
+  caloriesPer100g,
+  chooseOffServing,
+  gramsFromServingText,
+  hitFromOffProduct,
+  hitFromUsdaSearchFood,
+  itemFromHit,
+  lookupConfidence,
+  mergeUsdaPortions,
+  portionAssumption,
+} from './foods.ts'
 import {
   asAnalyzedServing,
   ensurePortion,
@@ -184,5 +195,133 @@ describe('USDA and barcode hits', () => {
     assert.equal(hit.quantity, 2)
     assert.equal(hit.grams, 28)
     assert.equal(hit.grams_per_unit, 14)
+    assert.equal(hit.servingNote, undefined)
+    assert.equal(lookupConfidence(hit), 0.8)
+  })
+
+  it('treats a bare serving_size number as grams instead of 100g', () => {
+    const hit = hitFromOffProduct({
+      product_name: 'Nutella',
+      serving_size: '33',
+      product_quantity: 1000,
+      nutriments: { proteins_100g: 6.3, 'energy-kcal_100g': 539, fibre_100g: 0 },
+    })
+    assert.equal(hit.grams, 33)
+    assert.equal(hit.quantity, 1)
+    assert.equal(itemFromHit(hit).calories, 178)
+    assert.ok(hit.measures.some((row) => row.label === 'package' && row.gramsPerUnit === 1000))
+  })
+
+  it('does not log a whole jar when serving_quantity is the package', () => {
+    const hit = hitFromOffProduct({
+      product_name: 'Peanut butter',
+      serving_quantity: 453,
+      product_quantity: 453,
+      categories_tags: ['en:spreads', 'en:nut-butters'],
+      nutriments: { proteins_100g: 25, 'energy-kcal_100g': 588 },
+    })
+    assert.equal(hit.grams, 15)
+    assert.equal(hit.unit, 'tbsp')
+    assert.match(String(hit.servingNote), /whole 453g package/)
+    assert.match(String(hit.servingNote), /1 tbsp/)
+    assert.equal(lookupConfidence(hit), 0.5)
+  })
+
+  it('prefers the label scoop when the package is also listed', () => {
+    const chosen = chooseOffServing({
+      serving_size: '2 tbsp (32g)',
+      serving_quantity: 453,
+      product_quantity: 453,
+      nutriments: { proteins_100g: 25, proteins_serving: 8, 'energy-kcal_100g': 588 },
+    })
+    assert.equal(chosen.grams, 32)
+    assert.equal(chosen.note, null)
+  })
+
+  it('infers serving grams from per-serving nutrients', () => {
+    const hit = hitFromOffProduct({
+      product_name: 'Coca-Cola',
+      serving_size: '1 portion',
+      product_quantity: 330,
+      nutriments: {
+        'energy-kcal_100g': 42,
+        'energy-kcal_serving': 139,
+        proteins_100g: 0,
+      },
+    })
+    assert.ok(Math.abs(hit.grams - 331) < 2)
+    assert.equal(itemFromHit(hit).calories, 139)
+  })
+
+  it('keeps a single-serve can that matches the package', () => {
+    const hit = hitFromOffProduct({
+      product_name: 'Cola',
+      serving_size: '1 can (12 fl oz)',
+      serving_quantity: 355,
+      product_quantity: 355,
+      nutriments: { 'energy-kcal_100g': 42, 'energy-kcal_serving': 149 },
+    })
+    assert.ok(hit.grams > 330 && hit.grams < 370)
+  })
+
+  it('starts energy-dense spreads at a tablespoon when serving is missing', () => {
+    const hit = hitFromOffProduct({
+      product_name: 'Nutella',
+      product_quantity: 400,
+      categories_tags: ['en:breakfasts', 'en:spreads', 'en:sweet-spreads'],
+      nutriments: { proteins_100g: 6.3, 'energy-kcal_100g': 539 },
+    })
+    assert.equal(hit.grams, 15)
+    assert.equal(hit.unit, 'tbsp')
+    assert.match(String(hit.servingNote), /1 tbsp \(15g\)/)
+    assert.equal(itemFromHit(hit).calories, 81)
+  })
+
+  it('warns when Open Food Facts has no serving at all', () => {
+    const hit = hitFromOffProduct({
+      product_name: 'Yogurt',
+      product_quantity: 500,
+      nutriments: { proteins_100g: 4, 'energy-kcal_100g': 80 },
+    })
+    assert.equal(hit.grams, 100)
+    assert.match(String(hit.servingNote), /no serving size/)
+    assert.equal(itemFromHit(hit).calories, 80)
+  })
+
+  it('reads fibre and energy in kJ', () => {
+    assert.equal(Math.round(caloriesPer100g({ 'energy-kj_100g': 1674 })), 400)
+    const hit = hitFromOffProduct({
+      product_name: 'Oats',
+      serving_size: '40g',
+      nutriments: { 'energy-kj_100g': 1570, proteins_100g: 13, fibre_100g: 10 },
+    })
+    const item = itemFromHit(hit)
+    assert.equal(hit.grams, 40)
+    assert.equal(item.fiber_g, 4)
+    assert.ok(item.calories > 140 && item.calories < 160)
+  })
+
+  it('treats implausible kcal as kilojoules', () => {
+    assert.equal(Math.round(caloriesPer100g({ 'energy-kcal_100g': 1674 })), 400)
+  })
+
+  it('parses serving text people actually print', () => {
+    assert.equal(gramsFromServingText('2 cookies (28 g)'), 28)
+    assert.equal(gramsFromServingText('33'), 33)
+    assert.equal(gramsFromServingText('39g'), 39)
+    assert.ok(Math.abs((gramsFromServingText('1 can (12 fl oz)') ?? 0) - 354.9) < 0.2)
+  })
+
+  it('tries UPC and EAN forms of the same barcode', () => {
+    assert.deepEqual(barcodeLookupCodes('016000275287'), [
+      '016000275287',
+      '16000275287',
+      '0016000275287',
+    ])
+    assert.deepEqual(barcodeLookupCodes('16000275287'), [
+      '16000275287',
+      '016000275287',
+      '0016000275287',
+    ])
   })
 })
