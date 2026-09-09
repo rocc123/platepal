@@ -392,8 +392,8 @@ export function AddMealPage() {
           <div className="helper-panel">
             <p className="helper-copy">
               Scan with the camera, take a barcode photo, or type the number. That also skips
-              analyze. Check the serving — crowd-sourced labels often use 100g or the whole
-              package.
+              analyze. US products use the USDA copy of the label; anything else comes from Open
+              Food Facts, so check the serving there.
             </p>
             <BarcodePicker
               onPick={(item, nextAssumptions, confidence) => {

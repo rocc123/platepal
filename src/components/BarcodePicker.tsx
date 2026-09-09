@@ -6,7 +6,7 @@ import {
   openBarcodeCamera,
   waitForVideoFrame,
 } from '../lib/barcode'
-import { itemFromHit, lookupBarcode, lookupConfidence, portionAssumption } from '../lib/foods'
+import { hitSourceLabel, itemFromHit, lookupBarcode, lookupConfidence, portionAssumption } from '../lib/foods'
 import type { MealItem } from '../lib/types'
 
 export function BarcodePicker({
@@ -96,7 +96,7 @@ export function BarcodePicker({
     setError(null)
     try {
       const hit = await lookupBarcode(raw)
-      onPick(itemFromHit(hit), portionAssumption('Open Food Facts', hit), lookupConfidence(hit))
+      onPick(itemFromHit(hit), portionAssumption(hitSourceLabel(hit), hit), lookupConfidence(hit))
       setCode('')
       setScanning(false)
     } catch (err) {
@@ -151,7 +151,7 @@ export function BarcodePicker({
   return (
     <div className="lookup">
       <label className="field">
-        <span>Barcode (Open Food Facts)</span>
+        <span>Barcode</span>
         <input
           type="text"
           inputMode="numeric"
