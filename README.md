@@ -102,14 +102,14 @@ Netlify works too: same `dist` output, and `public/_redirects` is already in the
 ## What is in v1
 
 - Sign in (email code, optional Google, or local email)
-- Today: protein bar, fiber bar, current fast, meals for the local calendar day
+- Today: protein bar, fiber bar, current fast, a 24-hour eating/fasting bar, meals for the local calendar day
 - Add / edit / delete meals, with a 15-minute eating duration so fasting starts when the meal ends
 - Analyze a photo or note (or enter a meal by hand). Photos of plates and recipes are named as a dish, not a grocery list.
 - Saved meal templates
 - Settings for name and goals
 - Basic PWA shell (Add to Home Screen)
 - USDA food search and barcodes (USDA branded labels, then Open Food Facts)
-- Multi-day protein/fiber charts and overnight fasting hours
+- Multi-day protein/fiber charts and a week of 24-hour eating/fasting bars
 
 Food search uses the USDA FoodData Central `DEMO_KEY` unless you set `VITE_USDA_API_KEY` (free at [api.data.gov](https://api.data.gov/signup/)). Barcodes check the USDA branded-food label first (it is the manufacturer's own panel) and fall back to Open Food Facts. Live scan and barcode photos work in the installed PWA (Safari and Chrome) with a JavaScript decoder; you can still type the number. Neither key belongs in Supabase secrets.
 
