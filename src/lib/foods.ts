@@ -6,6 +6,7 @@ import {
   formatQuantity,
   measuresFromSearchMeasures,
   measuresFromUsdaPortions,
+  OZ_IN_GRAMS,
   parseHouseholdPhrase,
   pluralUnit,
   portionFromHousehold,
@@ -27,6 +28,7 @@ export type FoodHit = {
   per_100g: NutritionTotals
   source: 'usda' | 'off'
   fdcId?: number
+  servingNote?: string
 }
 
 function usdaKey() {
@@ -144,7 +146,15 @@ export function portionAssumption(source: string, hit: FoodHit): string {
   const qty = formatQuantity(hit.quantity)
   const unit = hit.unit ? pluralUnit(hit.unit, hit.quantity) : 'serving'
   const grams = hit.grams ? ` (${formatGramsAmount(hit.grams)}g)` : ''
-  return `${source}, ${qty} ${unit}${grams}. Edit the amount if your portion is different.`
+  const base = `${source}, ${qty} ${unit}${grams}. Edit the amount if your portion is different.`
+  return hit.servingNote ? `${hit.servingNote} ${base}` : base
+}
+
+export function lookupConfidence(hit: FoodHit): number {
+  const n = hit.per_100g
+  if (!n.calories && !n.protein_g && !n.carbs_g && !n.fat_g) return 0.25
+  if (hit.servingNote) return 0.5
+  return 0.8
 }
 
 export function hitFromUsdaSearchFood(food: Record<string, unknown>): FoodHit {
@@ -204,38 +214,260 @@ export function mergeUsdaPortions(hit: FoodHit, portions: UsdaPortionLike[] | nu
   }
 }
 
-export function hitFromOffProduct(product: {
+const FL_OZ_IN_ML = 29.5735295625
+
+type OffProduct = {
   product_name?: string
   generic_name?: string
   brands?: string
-  nutriments?: Record<string, number>
+  nutriments?: Record<string, number | string | undefined>
   serving_quantity?: number | string
   serving_size?: string
-}): FoodHit {
+  product_quantity?: number | string
+  quantity?: string
+  categories?: string
+  categories_tags?: string[]
+}
+
+function positiveGrams(value: unknown): number | null {
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+function closeGrams(a: number, b: number, ratio = 0.2): boolean {
+  const scale = Math.max(a, b)
+  return scale > 0 && Math.abs(a - b) / scale <= ratio
+}
+
+export function gramsFromServingText(text: string | null | undefined): number | null {
+  const cleaned = String(text ?? '').replace(/\s+/g, ' ').trim()
+  if (!cleaned) return null
+
+  const parenFlOz = cleaned.match(/\((\d+(?:\.\d+)?)\s*fl\.?\s*oz\b/i)
+  if (parenFlOz) return Number(parenFlOz[1]) * FL_OZ_IN_ML
+  const parenOz = cleaned.match(/\((\d+(?:\.\d+)?)\s*oz\b/i)
+  if (parenOz) return Number(parenOz[1]) * OZ_IN_GRAMS
+  const parenG = cleaned.match(/\((\d+(?:\.\d+)?)\s*(g|gr|grams?|ml)\b/i)
+  if (parenG) return Number(parenG[1])
+
+  const flOz = cleaned.match(/(?:^|\s)(\d+(?:\.\d+)?)\s*fl\.?\s*oz\b/i)
+  if (flOz) return Number(flOz[1]) * FL_OZ_IN_ML
+  const oz = cleaned.match(/(?:^|\s)(\d+(?:\.\d+)?)\s*oz\b/i)
+  if (oz) return Number(oz[1]) * OZ_IN_GRAMS
+  const unit = cleaned.match(/(?:^|\s)(\d+(?:\.\d+)?)\s*(g|gr|grams?|ml)\b/i)
+  if (unit) return Number(unit[1])
+
+  if (/^\d+(?:\.\d+)?$/.test(cleaned)) {
+    const n = Number(cleaned)
+    if (n >= 1 && n <= 500) return n
+  }
+  return null
+}
+
+function nutrimentNumber(
+  n: Record<string, number | string | undefined>,
+  ...keys: string[]
+): number {
+  for (const key of keys) {
+    const value = Number(n[key])
+    if (Number.isFinite(value) && value > 0) return value
+  }
+  return 0
+}
+
+export function caloriesPer100g(n: Record<string, number | string | undefined>): number {
+  let kcal = nutrimentNumber(n, 'energy-kcal_100g', 'energy_kcal_100g')
+  const kj = nutrimentNumber(n, 'energy-kj_100g', 'energy_kj_100g', 'energy-kj', 'energy_100g')
+  if (!kcal && kj) kcal = kj / 4.184
+  if (kcal > 950) kcal = kcal / 4.184
+  return kcal
+}
+
+export function inferredServingGrams(
+  n: Record<string, number | string | undefined>,
+): number | null {
+  const pairs: Array<[string, string]> = [
+    ['energy-kcal_serving', 'energy-kcal_100g'],
+    ['proteins_serving', 'proteins_100g'],
+    ['carbohydrates_serving', 'carbohydrates_100g'],
+    ['fat_serving', 'fat_100g'],
+    ['fiber_serving', 'fiber_100g'],
+  ]
+  const estimates: number[] = []
+  for (const [servingKey, per100Key] of pairs) {
+    const serving = Number(n[servingKey])
+    const per100 = Number(n[per100Key])
+    if (serving > 0 && per100 > 0) {
+      const grams = (serving / per100) * 100
+      if (grams >= 2 && grams <= 800) estimates.push(grams)
+    }
+  }
+  if (!estimates.length) return null
+  estimates.sort((a, b) => a - b)
+  return Math.round(estimates[Math.floor((estimates.length - 1) / 2)] * 10) / 10
+}
+
+function packageGrams(product: OffProduct): number | null {
+  return positiveGrams(product.product_quantity) ?? gramsFromServingText(product.quantity)
+}
+
+function isWholePackageGuess(
+  grams: number,
+  pack: number | null,
+  servingSize: string,
+  inferred: number | null,
+): boolean {
+  if (!pack || !closeGrams(grams, pack, 0.12)) return false
+  if (inferred && inferred >= 5 && inferred < pack * 0.5) return true
+  const textGrams = gramsFromServingText(servingSize)
+  if (textGrams && textGrams < pack * 0.5) return true
+  if (!servingSize.trim() && pack > 300) return true
+  if (/^(1(\s+servings?)?)?$/i.test(servingSize.trim()) && pack > 300) return true
+  return false
+}
+
+function offCategoryText(product: OffProduct): string {
+  return [...(product.categories_tags ?? []), String(product.categories ?? '')].join(' ').toLowerCase()
+}
+
+function typicalDenseServing(product: OffProduct, kcalPer100: number): {
+  grams: number
+  household: string
+  note: string
+} | null {
+  if (kcalPer100 < 450) return null
+  const cats = offCategoryText(product)
+  if (/olive-oil|vegetable-oil|en:oils|seed-oil/.test(cats)) {
+    return {
+      grams: 14,
+      household: '1 tbsp',
+      note: 'Open Food Facts has no serving size. Started you at 1 tbsp (14g) for this oil.',
+    }
+  }
+  if (/spread|nut-butter|hazelnut|peanut-butter|chocolate|cocoa/.test(cats)) {
+    return {
+      grams: 15,
+      household: '1 tbsp',
+      note: 'Open Food Facts has no serving size. Started you at 1 tbsp (15g) for this spread.',
+    }
+  }
+  if (/(chips|crisp|en:chips)/.test(cats)) {
+    return {
+      grams: 28,
+      household: '1 serving (28g)',
+      note: 'Open Food Facts has no serving size. Started you at a 28g handful.',
+    }
+  }
+  return null
+}
+
+function householdIfItMatches(servingSize: string, grams: number): string | null {
+  if (!servingSize) return null
+  const parsed = parseHouseholdPhrase(servingSize, grams)
+  const parsedGrams =
+    parsed?.gramsPerUnit != null ? parsed.quantity * parsed.gramsPerUnit : null
+  if (parsed && parsedGrams && closeGrams(parsedGrams, grams, 0.3)) return servingSize
+  return null
+}
+
+export function chooseOffServing(product: OffProduct): {
+  grams: number
+  household: string | null
+  note: string | null
+} {
+  const n = product.nutriments ?? {}
+  const servingSize = String(product.serving_size ?? '').trim()
+  const fromText = gramsFromServingText(servingSize)
+  const inferred = inferredServingGrams(n)
+  const listed = positiveGrams(product.serving_quantity)
+  const pack = packageGrams(product)
+
+  const usable = (grams: number | null) =>
+    Boolean(grams && !isWholePackageGuess(grams, pack, servingSize, inferred))
+
+  if (fromText && usable(fromText)) {
+    return {
+      grams: Math.round(fromText * 10) / 10,
+      household: householdIfItMatches(servingSize, fromText),
+      note: null,
+    }
+  }
+  if (inferred && usable(inferred)) {
+    return {
+      grams: inferred,
+      household: householdIfItMatches(servingSize, inferred),
+      note: null,
+    }
+  }
+  if (listed && usable(listed)) {
+    return {
+      grams: Math.round(listed * 10) / 10,
+      household: householdIfItMatches(servingSize, listed),
+      note: null,
+    }
+  }
+
+  if (listed && isWholePackageGuess(listed, pack, servingSize, inferred) && pack) {
+    const dense = typicalDenseServing(product, caloriesPer100g(n))
+    if (dense) {
+      return {
+        grams: dense.grams,
+        household: dense.household,
+        note: `Open Food Facts listed the whole ${Math.round(pack)}g package as one serving. ${dense.note.replace('Open Food Facts has no serving size. ', '')}`,
+      }
+    }
+    return {
+      grams: 100,
+      household: null,
+      note: `Open Food Facts listed the whole ${Math.round(pack)}g package as one serving. Started you at 100g.`,
+    }
+  }
+
+  const dense = typicalDenseServing(product, caloriesPer100g(n))
+  if (dense) {
+    return { grams: dense.grams, household: dense.household, note: dense.note }
+  }
+
+  return {
+    grams: 100,
+    household: null,
+    note: 'Open Food Facts has no serving size, so this is 100g. A label serving is often a smaller scoop — edit the amount.',
+  }
+}
+
+export function hitFromOffProduct(product: OffProduct): FoodHit {
   const n = product.nutriments ?? {}
   const per_100g = roundNutrition({
-    calories: Number(n['energy-kcal_100g'] ?? n.energy_kcal_100g ?? 0),
+    calories: caloriesPer100g(n),
     protein_g: Number(n.proteins_100g ?? 0),
-    fiber_g: Number(n.fiber_100g ?? 0),
+    fiber_g: Number(n.fiber_100g ?? n.fibre_100g ?? 0),
     carbs_g: Number(n.carbohydrates_100g ?? 0),
     fat_g: Number(n.fat_100g ?? 0),
   })
-  const serving = Number(product.serving_quantity)
-  const grams = Number.isFinite(serving) && serving > 0 ? serving : 100
-  const household = String(product.serving_size ?? '').trim() || null
-  const parsed = household ? parseHouseholdPhrase(household, grams) : null
-  const measures: PortionMeasure[] = parsed
-    ? [{ unit: parsed.unit, gramsPerUnit: parsed.gramsPerUnit, label: parsed.label }]
-    : []
-  return hitFromMeasures({
+  const chosen = chooseOffServing(product)
+  const pack = packageGrams(product)
+  const extras: PortionMeasure[] = []
+  if (pack && Math.abs(pack - chosen.grams) > 8) {
+    extras.push({ unit: 'serving', gramsPerUnit: pack, label: 'package' })
+  }
+  const emptyNutrition =
+    !per_100g.calories && !per_100g.protein_g && !per_100g.carbs_g && !per_100g.fat_g
+  const servingNote = [
+    chosen.note,
+    emptyNutrition ? 'Nutrition facts are missing — add them from the label.' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+  const hit = hitFromMeasures({
     name: (product.product_name || product.generic_name || 'Packaged food').trim(),
     detailParts: [product.brands],
-    gramsFallback: grams,
-    measures,
-    household,
+    gramsFallback: chosen.grams,
+    measures: extras,
+    household: chosen.household,
     per_100g,
     source: 'off',
   })
+  return servingNote ? { ...hit, servingNote } : hit
 }
 
 async function usdaJson(path: string, params: URLSearchParams) {
@@ -279,15 +511,46 @@ export async function enrichUsdaHit(hit: FoodHit): Promise<FoodHit> {
   }
 }
 
-export async function lookupBarcode(barcode: string): Promise<FoodHit> {
-  const code = barcode.replace(/\D/g, '')
-  if (code.length < 8) throw new Error('Enter a barcode with at least 8 digits.')
+export function barcodeLookupCodes(barcode: string): string[] {
+  const digits = barcode.replace(/\D/g, '')
+  const codes: string[] = []
+  const add = (value: string) => {
+    if (value && !codes.includes(value)) codes.push(value)
+  }
+  add(digits)
+  add(digits.replace(/^0+/, ''))
+  if (digits.length === 11) {
+    add(digits.padStart(12, '0'))
+    add(digits.padStart(13, '0'))
+  }
+  if (digits.length === 12) add(`0${digits}`)
+  if (digits.length === 13 && digits.startsWith('0')) add(digits.slice(1))
+  return codes
+}
 
+async function fetchOffProduct(code: string): Promise<{ status?: number; product?: OffProduct }> {
   const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json`, {
     headers: { Accept: 'application/json' },
   })
   if (!res.ok) throw new Error('Could not reach Open Food Facts.')
-  const data = await res.json()
-  if (data.status !== 1 || !data.product) throw new Error('No food found for that barcode.')
-  return hitFromOffProduct(data.product)
+  return res.json()
+}
+
+export async function lookupBarcode(barcode: string): Promise<FoodHit> {
+  const codes = barcodeLookupCodes(barcode)
+  if (!codes[0] || codes[0].length < 8) throw new Error('Enter a barcode with at least 8 digits.')
+
+  let sawMissing = false
+  let networkError: Error | null = null
+  for (const code of codes) {
+    try {
+      const data = await fetchOffProduct(code)
+      if (data.status === 1 && data.product) return hitFromOffProduct(data.product)
+      sawMissing = true
+    } catch (err) {
+      networkError = err instanceof Error ? err : new Error('Could not reach Open Food Facts.')
+    }
+  }
+  if (networkError && !sawMissing) throw networkError
+  throw new Error('No food found for that barcode.')
 }
