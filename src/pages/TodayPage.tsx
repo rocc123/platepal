@@ -96,6 +96,8 @@ export function TodayPage() {
           lastMeal={lastMeal}
           previousMeal={previousMeal}
           firstMeal={firstMeal}
+          meals={meals}
+          dayKey={localDayKey(day)}
           addHref={addHref}
         />
       ) : null}

@@ -1,74 +1,78 @@
 import { DateTime } from 'luxon'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { weekdayShort } from '../lib/dates'
-import {
-  fastBandPlacement,
-  formatFastDuration,
-  formatFastHoursCompact,
-  overnightWindow,
-} from '../lib/fasting'
+import { appZone, localDayKey, weekdayShort } from '../lib/dates'
+import { dayRhythm } from '../lib/fasting'
+import type { Meal } from '../lib/types'
+import { DayRhythmTrack } from './DayRhythmBar'
 
 export type FastingChartPoint = {
   key: string
   date: Date
-  fastingMinutes: number | null
-  fastStart: DateTime | null
-  fastEnd: DateTime | null
-  inProgress: boolean
 }
 
-export function FastingChart({ points }: { points: FastingChartPoint[] }) {
+const AXIS = ['12a', '6a', '12p', '6p', '12a'] as const
+
+export function FastingChart({ points, meals }: { points: FastingChartPoint[]; meals: Meal[] }) {
+  const todayKey = localDayKey(new Date())
+  const [nowMs, setNowMs] = useState(() => Date.now())
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 30_000)
+    return () => window.clearInterval(id)
+  }, [])
+
+  const now = DateTime.fromMillis(nowMs)
+
   return (
     <section className="card chart-card fasting-chart-card">
       <div className="goal-head">
-        <span className="goal-label fasting">Overnight</span>
-        <span className="muted">6pm → noon</span>
+        <span className="goal-label fasting">Eating & fasting</span>
+        <span className="muted">12a → 12a</span>
       </div>
-      <div className="fast-chart">
-        <div className="fast-axis" aria-hidden="true">
-          <span>6p</span>
-          <span>12a</span>
-          <span>6a</span>
-          <span>12p</span>
+      <div className="rhythm-chart">
+        <div className="rhythm-chart-axis" aria-hidden="true">
+          <span />
+          <div className="day-rhythm-axis">
+            {AXIS.map((label, index) => (
+              <span key={`${label}-${index}`}>{label}</span>
+            ))}
+          </div>
+          <span />
         </div>
-        <div
-          className="fast-days"
-          style={{ gridTemplateColumns: `repeat(${points.length}, minmax(0, 1fr))` }}
-        >
-          {points.map((point) => {
-            const window = overnightWindow(point.key)
-            const band =
-              point.fastStart && point.fastEnd
-                ? fastBandPlacement(point.fastStart, point.fastEnd, window.start, window.end)
-                : null
-            const label =
-              point.fastingMinutes == null
-                ? 'Overnight —'
-                : `Overnight ${formatFastDuration(point.fastingMinutes)}${
-                    point.fastStart && point.fastEnd
-                      ? ` · ${point.fastStart.toFormat('t')} → ${point.fastEnd.toFormat('t')}`
-                      : ''
-                  }${point.inProgress ? ' and counting' : ''}`
-            return (
-              <Link key={point.key} className="chart-col fast-col" to={`/?d=${point.key}`} title={label}>
-                <div className="chart-track fast-track">
-                  <div className="fast-midnight" />
-                  {band ? (
-                    <div
-                      className={`fast-band${point.inProgress ? ' in-progress' : ''}`}
-                      style={{ top: `${band.top}%`, height: `${Math.max(band.height, 3)}%` }}
-                    />
-                  ) : null}
-                </div>
-                <span>{weekdayShort(point.date)}</span>
-                <span className="chart-num">
-                  {point.fastingMinutes == null ? '–' : `${formatFastHoursCompact(point.fastingMinutes)}h`}
-                </span>
-              </Link>
-            )
-          })}
-        </div>
+        {points.map((point) => {
+          const zone = meals[0]?.tz_name || appZone()
+          const rhythm = dayRhythm(meals, point.key, zone)
+          const label =
+            rhythm.mealCount === 0
+              ? `${weekdayShort(point.date)} · no meals`
+              : `${weekdayShort(point.date)} · ${rhythm.mealCount} ${
+                  rhythm.mealCount === 1 ? 'meal' : 'meals'
+                } · ${rhythm.mealStarts.map((start) => start.toFormat('t')).join(', ')}`
+          return (
+            <Link key={point.key} className="rhythm-chart-row" to={`/?d=${point.key}`} title={label}>
+              <span>{weekdayShort(point.date)}</span>
+              <DayRhythmTrack
+                meals={meals}
+                dayKey={point.key}
+                now={point.key === todayKey ? now : undefined}
+                compact
+              />
+              <span className="chart-num">{rhythm.mealCount === 0 ? '–' : rhythm.mealCount}</span>
+            </Link>
+          )
+        })}
       </div>
+      <p className="day-rhythm-legend muted" aria-hidden="true">
+        <span>
+          <i className="day-rhythm-swatch eat" />
+          Eating
+        </span>
+        <span>
+          <i className="day-rhythm-swatch fast" />
+          Fasting
+        </span>
+      </p>
     </section>
   )
 }

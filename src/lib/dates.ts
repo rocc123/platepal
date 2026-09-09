@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon'
-import { inferPeriodId } from './lookups'
+import { inferPeriodId } from './lookups.ts'
 
 export function appZone(): string {
   return DateTime.local().zoneName || 'UTC'

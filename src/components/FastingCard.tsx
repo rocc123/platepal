@@ -1,8 +1,10 @@
 import { DateTime } from 'luxon'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { DayRhythmBar } from './DayRhythmBar'
 import { formatTime } from '../lib/dates'
 import {
+  collectRhythmMeals,
   currentFasting,
   formatFastDuration,
   mealEndedAt,
@@ -17,6 +19,8 @@ type FastingCardProps = {
   lastMeal: Meal | null
   previousMeal: Meal | null
   firstMeal: Meal | null
+  meals: Meal[]
+  dayKey: string
   addHref: string
 }
 
@@ -46,7 +50,15 @@ function FastClock({ totalSeconds, label }: { totalSeconds: number; label: strin
   )
 }
 
-export function FastingCard({ viewingToday, lastMeal, previousMeal, firstMeal, addHref }: FastingCardProps) {
+export function FastingCard({
+  viewingToday,
+  lastMeal,
+  previousMeal,
+  firstMeal,
+  meals,
+  dayKey,
+  addHref,
+}: FastingCardProps) {
   const [nowMs, setNowMs] = useState(() => Date.now())
 
   useEffect(() => {
@@ -55,8 +67,16 @@ export function FastingCard({ viewingToday, lastMeal, previousMeal, firstMeal, a
     return () => window.clearInterval(id)
   }, [viewingToday])
 
+  const now = DateTime.fromMillis(nowMs)
+  const rhythmMeals = useMemo(
+    () => collectRhythmMeals(meals, [previousMeal, lastMeal]),
+    [meals, previousMeal, lastMeal],
+  )
+  const bar = (
+    <DayRhythmBar meals={rhythmMeals} dayKey={dayKey} now={viewingToday ? now : undefined} linkMeals />
+  )
+
   if (viewingToday) {
-    const now = DateTime.fromMillis(nowMs)
     const status = currentFasting(lastMeal, now)
     if (status.kind === 'none') {
       return (
@@ -70,6 +90,7 @@ export function FastingCard({ viewingToday, lastMeal, previousMeal, firstMeal, a
           <Link className="btn linkish" to={addHref}>
             Add last meal
           </Link>
+          {bar}
         </section>
       )
     }
@@ -87,6 +108,7 @@ export function FastingCard({ viewingToday, lastMeal, previousMeal, firstMeal, a
           <p className="muted">
             {periodLabel(status.meal)} · fast starts at {end.toFormat('t')}
           </p>
+          {bar}
         </section>
       )
     }
@@ -102,20 +124,26 @@ export function FastingCard({ viewingToday, lastMeal, previousMeal, firstMeal, a
         <p className="muted">
           Since {periodLabel(status.meal).toLowerCase()} at {end.toFormat('t')}
         </p>
+        {bar}
       </section>
     )
   }
 
   const overnight = overnightFastMinutes(previousMeal, firstMeal)
-  if (overnight == null || !previousMeal || !firstMeal) return null
-
   return (
     <section className="card last-ate fasting-card">
-      <p className="composer-kicker">Overnight</p>
-      <p className="last-ate-label">Fasted {formatFastDuration(overnight)}</p>
-      <p className="muted">
-        Until {periodLabel(firstMeal).toLowerCase()} at {formatTime(firstMeal.eaten_at, firstMeal.tz_name)}
-      </p>
+      <p className="composer-kicker">{overnight != null ? 'Overnight' : 'Day'}</p>
+      {overnight != null && firstMeal ? (
+        <>
+          <p className="last-ate-label">Fasted {formatFastDuration(overnight)}</p>
+          <p className="muted">
+            Until {periodLabel(firstMeal).toLowerCase()} at {formatTime(firstMeal.eaten_at, firstMeal.tz_name)}
+          </p>
+        </>
+      ) : (
+        <p className="muted">Eating and fasting for this day.</p>
+      )}
+      {bar}
     </section>
   )
 }

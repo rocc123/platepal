@@ -198,6 +198,7 @@ export function ChartsPage() {
             variant="fiber"
             valueOf={(point) => point.fiber}
           />
+          <FastingChart points={points} meals={meals} />
           {profile.calorie_goal ? (
             <Chart
               label="Calories"
@@ -222,7 +223,6 @@ export function ChartsPage() {
             variant="fat"
             valueOf={(point) => point.fat}
           />
-          <FastingChart points={points} />
         </>
       ) : null}
     </div>

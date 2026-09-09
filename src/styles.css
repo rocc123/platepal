@@ -796,6 +796,136 @@ textarea {
   margin-top: 4px;
 }
 
+.day-rhythm {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.day-rhythm-track {
+  position: relative;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--fasting-soft);
+  overflow: hidden;
+}
+
+.day-rhythm-track.compact {
+  height: 14px;
+}
+
+.day-rhythm-eat {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  min-width: 7px;
+  border-radius: 999px;
+  background: var(--protein);
+}
+
+.day-rhythm-track.compact .day-rhythm-eat {
+  top: 2px;
+  bottom: 2px;
+  min-width: 5px;
+}
+
+.day-rhythm-now {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--ink);
+  transform: translateX(-50%);
+  z-index: 2;
+}
+
+.day-rhythm-future {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: color-mix(in srgb, var(--porcelain) 48%, transparent);
+  pointer-events: none;
+}
+
+.day-rhythm-axis {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.day-rhythm-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.day-rhythm-caption {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.day-rhythm-legend {
+  display: flex;
+  gap: 14px;
+  margin: 0;
+  font-size: 0.72rem;
+}
+
+.day-rhythm-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.day-rhythm-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--fasting-soft);
+  box-shadow: inset 0 0 0 1px rgba(21, 32, 43, 0.08);
+}
+
+.day-rhythm-swatch.eat {
+  background: var(--protein);
+}
+
+.rhythm-chart {
+  display: grid;
+  gap: 7px;
+}
+
+.rhythm-chart-axis,
+.rhythm-chart-row {
+  display: grid;
+  grid-template-columns: 2.1rem minmax(0, 1fr) 1.2rem;
+  gap: 8px;
+  align-items: center;
+}
+
+.rhythm-chart-row {
+  text-decoration: none;
+  min-width: 0;
+}
+
+.rhythm-chart-axis span,
+.rhythm-chart-row > span {
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+.rhythm-chart-row .chart-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.fasting-chart-card .day-rhythm-legend {
+  margin-top: 2px;
+}
+
 .empty {
   padding: 28px 8px 8px;
   text-align: center;
