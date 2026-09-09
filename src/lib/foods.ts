@@ -157,6 +157,10 @@ export function lookupConfidence(hit: FoodHit): number {
   return 0.8
 }
 
+export function hitSourceLabel(hit: FoodHit): string {
+  return hit.source === 'usda' ? 'USDA FoodData Central' : 'Open Food Facts'
+}
+
 export function hitFromUsdaSearchFood(food: Record<string, unknown>): FoodHit {
   const nutrients = (food.foodNutrients as Array<{ nutrientId?: number; value?: number }>) ?? []
   const serving = Number(food.servingSize)
@@ -435,9 +439,44 @@ export function chooseOffServing(product: OffProduct): {
   }
 }
 
+function macroCalories(n: NutritionTotals): number {
+  return n.protein_g * 4 + n.carbs_g * 4 + n.fat_g * 9
+}
+
+/**
+ * Open Food Facts contributors sometimes copy the per-serving protein, carbs, and fat
+ * off a US label straight into the per-100g fields while the calories are right.
+ * When the macros only add up to the listed calories after scaling by the serving,
+ * scale them.
+ */
+export function reconcileOffPer100g(
+  per100: NutritionTotals,
+  servingGrams: number | null,
+): { per_100g: NutritionTotals; note: string | null } {
+  const kcal = per100.calories
+  const fromMacros = macroCalories(per100)
+  if (!kcal || !fromMacros || !servingGrams || servingGrams < 5 || servingGrams > 95) {
+    return { per_100g: per100, note: null }
+  }
+  if (fromMacros / kcal >= 0.7) return { per_100g: per100, note: null }
+  const factor = 100 / servingGrams
+  const scaled = fromMacros * factor
+  if (Math.abs(scaled - kcal) / kcal > 0.15) return { per_100g: per100, note: null }
+  return {
+    per_100g: roundNutrition({
+      calories: kcal,
+      protein_g: per100.protein_g * factor,
+      fiber_g: per100.fiber_g * factor,
+      carbs_g: per100.carbs_g * factor,
+      fat_g: per100.fat_g * factor,
+    }),
+    note: `Open Food Facts listed per-serving protein, carbs, and fat as per-100g values. Scaled them to match the ${Math.round(kcal)} kcal per 100g — check the label.`,
+  }
+}
+
 export function hitFromOffProduct(product: OffProduct): FoodHit {
   const n = product.nutriments ?? {}
-  const per_100g = roundNutrition({
+  const listed = roundNutrition({
     calories: caloriesPer100g(n),
     protein_g: Number(n.proteins_100g ?? 0),
     fiber_g: Number(n.fiber_100g ?? n.fibre_100g ?? 0),
@@ -445,6 +484,8 @@ export function hitFromOffProduct(product: OffProduct): FoodHit {
     fat_g: Number(n.fat_100g ?? 0),
   })
   const chosen = chooseOffServing(product)
+  const reconciled = reconcileOffPer100g(listed, chosen.grams)
+  const per_100g = reconciled.per_100g
   const pack = packageGrams(product)
   const extras: PortionMeasure[] = []
   if (pack && Math.abs(pack - chosen.grams) > 8) {
@@ -454,6 +495,7 @@ export function hitFromOffProduct(product: OffProduct): FoodHit {
     !per_100g.calories && !per_100g.protein_g && !per_100g.carbs_g && !per_100g.fat_g
   const servingNote = [
     chosen.note,
+    reconciled.note,
     emptyNutrition ? 'Nutrition facts are missing — add them from the label.' : '',
   ]
     .filter(Boolean)
@@ -525,7 +567,38 @@ export function barcodeLookupCodes(barcode: string): string[] {
   }
   if (digits.length === 12) add(`0${digits}`)
   if (digits.length === 13 && digits.startsWith('0')) add(digits.slice(1))
+  if (digits.length >= 11 && digits.length < 14) add(digits.padStart(14, '0'))
   return codes
+}
+
+export function sameGtin(a: string, b: string): boolean {
+  const strip = (value: string) => value.replace(/\D/g, '').replace(/^0+/, '')
+  const left = strip(a)
+  return left.length > 0 && left === strip(b)
+}
+
+/**
+ * USDA stores the same product as a 12-digit UPC or a 14-digit GTIN depending on who
+ * supplied it, and its search only matches the exact token. Ask for every form at once.
+ */
+export function findUsdaBarcodeFood(
+  foods: Array<Record<string, unknown>>,
+  barcode: string,
+): Record<string, unknown> | null {
+  return foods.find((food) => sameGtin(String(food.gtinUpc ?? ''), barcode)) ?? null
+}
+
+async function lookupUsdaBarcode(codes: string[]): Promise<FoodHit | null> {
+  const params = new URLSearchParams({
+    query: codes.join(' '),
+    dataType: 'Branded',
+    pageSize: '10',
+    api_key: usdaKey(),
+  })
+  const data = await usdaJson('foods/search', params)
+  const foods = Array.isArray(data?.foods) ? data.foods : []
+  const food = findUsdaBarcodeFood(foods, codes[0])
+  return food ? hitFromUsdaSearchFood(food) : null
 }
 
 async function fetchOffProduct(code: string): Promise<{ status?: number; product?: OffProduct }> {
@@ -536,10 +609,7 @@ async function fetchOffProduct(code: string): Promise<{ status?: number; product
   return res.json()
 }
 
-export async function lookupBarcode(barcode: string): Promise<FoodHit> {
-  const codes = barcodeLookupCodes(barcode)
-  if (!codes[0] || codes[0].length < 8) throw new Error('Enter a barcode with at least 8 digits.')
-
+async function lookupOffBarcode(codes: string[]): Promise<FoodHit> {
   let sawMissing = false
   let networkError: Error | null = null
   for (const code of codes) {
@@ -553,4 +623,18 @@ export async function lookupBarcode(barcode: string): Promise<FoodHit> {
   }
   if (networkError && !sawMissing) throw networkError
   throw new Error('No food found for that barcode.')
+}
+
+/**
+ * The USDA branded database carries the manufacturer's own label, so it wins when the
+ * barcode is there. Open Food Facts covers everything else.
+ */
+export async function lookupBarcode(barcode: string): Promise<FoodHit> {
+  const codes = barcodeLookupCodes(barcode)
+  if (!codes[0] || codes[0].length < 8) throw new Error('Enter a barcode with at least 8 digits.')
+
+  const [usda, off] = await Promise.allSettled([lookupUsdaBarcode(codes), lookupOffBarcode(codes)])
+  if (usda.status === 'fulfilled' && usda.value) return usda.value
+  if (off.status === 'fulfilled') return off.value
+  throw off.reason instanceof Error ? off.reason : new Error('No food found for that barcode.')
 }

@@ -4,12 +4,16 @@ import {
   barcodeLookupCodes,
   caloriesPer100g,
   chooseOffServing,
+  findUsdaBarcodeFood,
   gramsFromServingText,
   hitFromOffProduct,
   hitFromUsdaSearchFood,
+  hitSourceLabel,
   itemFromHit,
   lookupConfidence,
   mergeUsdaPortions,
+  reconcileOffPer100g,
+  sameGtin,
 } from './foods.ts'
 import {
   asAnalyzedServing,
@@ -312,16 +316,117 @@ describe('USDA and barcode hits', () => {
     assert.ok(Math.abs((gramsFromServingText('1 can (12 fl oz)') ?? 0) - 354.9) < 0.2)
   })
 
-  it('tries UPC and EAN forms of the same barcode', () => {
+  it('tries UPC, EAN, and GTIN-14 forms of the same barcode', () => {
     assert.deepEqual(barcodeLookupCodes('016000275287'), [
       '016000275287',
       '16000275287',
       '0016000275287',
+      '00016000275287',
     ])
     assert.deepEqual(barcodeLookupCodes('16000275287'), [
       '16000275287',
       '016000275287',
       '0016000275287',
+      '00016000275287',
     ])
+  })
+
+  it('matches the USDA row whose GTIN is the scanned barcode in any zero-padded form', () => {
+    assert.equal(sameGtin('00016000275287', '016000275287'), true)
+    assert.equal(sameGtin('644225727832', '0644225727832'), true)
+    assert.equal(sameGtin('644225727832', '644225727833'), false)
+    assert.equal(sameGtin('', ''), false)
+    const foods = [
+      { gtinUpc: '00016000275287', description: 'Cheerios Cereal' },
+      { gtinUpc: '644225727832', description: 'TRIPLE CHOCOLATE PROTEIN ENERGY BAR, TRIPLE CHOCOLATE' },
+    ]
+    assert.equal(findUsdaBarcodeFood(foods, '644225727832')?.description, foods[1].description)
+    assert.equal(findUsdaBarcodeFood(foods, '999999999999'), null)
+  })
+
+  it('reads a USDA branded label as the bar it is', () => {
+    const hit = hitFromUsdaSearchFood({
+      fdcId: 2665580,
+      description: 'TRIPLE CHOCOLATE PROTEIN ENERGY BAR, TRIPLE CHOCOLATE',
+      brandName: 'POWER CRUNCH',
+      dataType: 'Branded',
+      gtinUpc: '644225727832',
+      servingSize: 40,
+      servingSizeUnit: 'GRM',
+      householdServingFullText: '1 Cookie',
+      foodNutrients: [
+        { nutrientId: 1008, value: 550 },
+        { nutrientId: 1003, value: 32.5 },
+        { nutrientId: 1004, value: 32.5 },
+        { nutrientId: 1005, value: 27.5 },
+        { nutrientId: 1079, value: 2.5 },
+      ],
+    })
+    assert.equal(hit.name, 'Triple chocolate protein energy bar')
+    assert.equal(hit.grams, 40)
+    assert.equal(hit.unit, 'piece')
+    const item = itemFromHit(hit)
+    assert.equal(item.calories, 220)
+    assert.equal(item.protein_g, 13)
+    assert.equal(item.fiber_g, 1)
+    assert.equal(hitSourceLabel(hit), 'USDA FoodData Central')
+    assert.equal(lookupConfidence(hit), 0.8)
+  })
+
+  it('rescales Open Food Facts macros that were typed per bar instead of per 100g', () => {
+    const hit = hitFromOffProduct({
+      product_name: 'Protein Bar',
+      brands: 'Power crunch',
+      serving_quantity: 40,
+      serving_size: '1 Bar (40 g)',
+      product_quantity: 39.689332375,
+      nutriments: {
+        'energy-kcal_100g': 550,
+        'energy-kcal_serving': 220,
+        proteins_100g: 13,
+        proteins_serving: 5.2,
+        carbohydrates_100g: 11,
+        fat_100g: 13,
+        fiber_100g: 1,
+      },
+    })
+    assert.equal(hit.grams, 40)
+    const item = itemFromHit(hit)
+    assert.equal(item.calories, 220)
+    assert.equal(item.protein_g, 13)
+    assert.equal(item.carbs_g, 11)
+    assert.equal(item.fat_g, 13)
+    assert.equal(item.fiber_g, 1)
+    assert.match(String(hit.servingNote), /per-serving protein/)
+    assert.equal(lookupConfidence(hit), 0.5)
+    assert.equal(hitSourceLabel(hit), 'Open Food Facts')
+  })
+
+  it('leaves Open Food Facts macros alone when they already add up', () => {
+    const clean = reconcileOffPer100g(
+      { calories: 550, protein_g: 32.5, fiber_g: 2.5, carbs_g: 27.5, fat_g: 32.5 },
+      40,
+    )
+    assert.equal(clean.note, null)
+    assert.equal(clean.per_100g.protein_g, 32.5)
+
+    const lowCarbBar = reconcileOffPer100g(
+      { calories: 333, protein_g: 35, fiber_g: 23, carbs_g: 35, fat_g: 13 },
+      60,
+    )
+    assert.equal(lowCarbBar.note, null)
+
+    const beer = reconcileOffPer100g(
+      { calories: 43, protein_g: 0.5, fiber_g: 0, carbs_g: 3.6, fat_g: 0 },
+      355,
+    )
+    assert.equal(beer.note, null)
+    assert.equal(beer.per_100g.carbs_g, 3.6)
+
+    const wrongButNotByTheServing = reconcileOffPer100g(
+      { calories: 550, protein_g: 13, fiber_g: 1, carbs_g: 11, fat_g: 13 },
+      60,
+    )
+    assert.equal(wrongButNotByTheServing.note, null)
   })
 })

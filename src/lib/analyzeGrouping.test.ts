@@ -101,6 +101,10 @@ describe('analyze grouping', () => {
 describe('food names', () => {
   it('softens USDA catalog caps without inventing a new food', () => {
     assert.equal(humanizeFoodName('LETTUCE, GREEN LEAF, RAW'), 'Lettuce, green leaf, raw')
+    assert.equal(
+      humanizeFoodName('TRIPLE CHOCOLATE PROTEIN ENERGY BAR, TRIPLE CHOCOLATE'),
+      'Triple chocolate protein energy bar',
+    )
     assert.equal(humanizeFoodName('Turkey burger on lettuce'), 'Turkey burger on lettuce')
   })
 })
