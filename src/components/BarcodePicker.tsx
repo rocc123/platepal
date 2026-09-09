@@ -6,10 +6,14 @@ import {
   openBarcodeCamera,
   waitForVideoFrame,
 } from '../lib/barcode'
-import { itemFromHit, lookupBarcode, portionAssumption } from '../lib/foods'
+import { itemFromHit, lookupBarcode, lookupConfidence, portionAssumption } from '../lib/foods'
 import type { MealItem } from '../lib/types'
 
-export function BarcodePicker({ onPick }: { onPick: (item: MealItem, assumptions: string) => void }) {
+export function BarcodePicker({
+  onPick,
+}: {
+  onPick: (item: MealItem, assumptions: string, confidence: number) => void
+}) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const lookupRef = useRef<(raw: string) => Promise<void>>(async () => undefined)
@@ -42,15 +46,25 @@ export function BarcodePicker({ onPick }: { onPick: (item: MealItem, assumptions
         el.srcObject = stream
         await el.play()
         await waitForVideoFrame(el)
+        let last = ''
+        let hits = 0
         const tick = async () => {
           if (cancelled || !videoRef.current) return
           try {
             const found = await detectBarcodeInSource(videoRef.current)
             if (found) {
-              setCode(found)
-              setScanning(false)
-              await lookupRef.current(found)
-              return
+              if (found === last) {
+                hits += 1
+                if (hits >= 2) {
+                  setCode(found)
+                  setScanning(false)
+                  await lookupRef.current(found)
+                  return
+                }
+              } else {
+                last = found
+                hits = 1
+              }
             }
           } catch {
             // keep scanning
@@ -82,10 +96,7 @@ export function BarcodePicker({ onPick }: { onPick: (item: MealItem, assumptions
     setError(null)
     try {
       const hit = await lookupBarcode(raw)
-      onPick(
-        itemFromHit(hit),
-        portionAssumption('Open Food Facts', hit),
-      )
+      onPick(itemFromHit(hit), portionAssumption('Open Food Facts', hit), lookupConfidence(hit))
       setCode('')
       setScanning(false)
     } catch (err) {
@@ -152,7 +163,7 @@ export function BarcodePicker({ onPick }: { onPick: (item: MealItem, assumptions
       {scanning ? (
         <div className="scan-stage">
           <video ref={videoRef} className="scan-video" muted playsInline autoPlay />
-          <p className="scan-hint">Point the camera at the barcode</p>
+          <p className="scan-hint">Hold steady on the barcode until it locks</p>
         </div>
       ) : null}
       <div className="row-actions two">

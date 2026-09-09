@@ -15,9 +15,25 @@ export function canUseLiveCamera() {
   return Boolean(window.isSecureContext && navigator.mediaDevices?.getUserMedia)
 }
 
-function productCode(raw: string): string | null {
+export function eanChecksumOk(digits: string): boolean {
+  if (!/^\d{8}$|^\d{12,14}$/.test(digits)) return false
+  let sum = 0
+  const body = digits.slice(0, -1)
+  const check = Number(digits.slice(-1))
+  for (let i = 0; i < body.length; i++) {
+    const n = Number(body[body.length - 1 - i])
+    sum += i % 2 === 0 ? n * 3 : n
+  }
+  return (10 - (sum % 10)) % 10 === check
+}
+
+export function productCode(raw: string): string | null {
   const digits = raw.replace(/\D/g, '')
-  return digits.length >= 8 ? digits : null
+  if (digits.length < 8) return null
+  if ((digits.length === 12 || digits.length === 13 || digits.length === 14) && !eanChecksumOk(digits)) {
+    return null
+  }
+  return digits
 }
 
 function isZxingMiss(err: unknown) {
