@@ -4,7 +4,10 @@ import { DateTime } from 'luxon'
 import {
   dayRhythm,
   eatingSpansForDay,
+  fastingDayNumber,
+  fastingStartsLabel,
   formatDayRhythmCaption,
+  isMultiDayFast,
   nowOnDayPct,
   placeOnWindow,
 } from './fasting.ts'
@@ -109,6 +112,40 @@ describe('dayRhythm', () => {
     const rhythm = dayRhythm([], '2026-09-08', zone)
     assert.equal(rhythm.mealCount, 0)
     assert.equal(formatDayRhythmCaption(rhythm), 'No meals yet')
+  })
+
+  it('names when an empty day is part of a longer fast', () => {
+    const rhythm = dayRhythm([], '2026-09-10', zone)
+    const started = DateTime.fromISO('2026-09-07T14:30', { zone })
+    const now = DateTime.fromISO('2026-09-10T16:00', { zone })
+    assert.equal(
+      formatDayRhythmCaption(rhythm, { fastStartedAt: started, now }),
+      `No meals · fasting since ${started.toFormat("cccc 'at' t")}`,
+    )
+  })
+})
+
+describe('fastingDayNumber', () => {
+  it('counts the first 24 hours as day 1', () => {
+    assert.equal(fastingDayNumber(0), 1)
+    assert.equal(fastingDayNumber(23 * 60 + 59), 1)
+    assert.equal(isMultiDayFast(23 * 60 + 59), false)
+  })
+
+  it('rolls to day 2 at 24 hours', () => {
+    assert.equal(fastingDayNumber(24 * 60), 2)
+    assert.equal(fastingDayNumber(47 * 60), 2)
+    assert.equal(fastingDayNumber(72 * 60), 4)
+    assert.equal(isMultiDayFast(24 * 60), true)
+  })
+})
+
+describe('fastingStartsLabel', () => {
+  it('includes the day when the meal is not today', () => {
+    const start = DateTime.fromISO('2026-09-07T14:15', { zone })
+    const now = DateTime.fromISO('2026-09-10T16:00', { zone })
+    const label = fastingStartsLabel(start, 15, now)
+    assert.match(label, /Fasting starts Monday at /)
   })
 })
 

@@ -61,6 +61,24 @@ export function formatTime(iso: string, zone?: string | null): string {
   return fromUtc(iso, zone).toFormat('t')
 }
 
+/** Clock time, plus a day when `when` is not today. */
+export function formatClockOnDay(
+  when: DateTime,
+  now: DateTime<boolean> = DateTime.local(),
+): string {
+  const zone = when.zoneName || now.zoneName || appZone()
+  const local = when.setZone(zone)
+  const today = now.setZone(zone)
+  const time = local.toFormat('t')
+  if (local.hasSame(today, 'day')) return `at ${time}`
+  if (local.hasSame(today.minus({ days: 1 }), 'day')) return `yesterday at ${time}`
+  if (local.hasSame(today.plus({ days: 1 }), 'day')) return `tomorrow at ${time}`
+  const daysAgo = Math.round(today.startOf('day').diff(local.startOf('day'), 'days').days)
+  if (daysAgo > 1 && daysAgo < 7) return local.toFormat("cccc 'at' t")
+  if (local.hasSame(today, 'year')) return local.toFormat("ccc, LLL d 'at' t")
+  return local.toFormat("LLL d, yyyy 'at' t")
+}
+
 export function localDayKey(date: Date, zone = appZone()): string {
   return DateTime.fromJSDate(date).setZone(zone).toFormat('yyyy-LL-dd')
 }
