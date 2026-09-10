@@ -18,6 +18,7 @@ type DayRhythmBarProps = {
   now?: DateTime
   compact?: boolean
   linkMeals?: boolean
+  fastStartedAt?: DateTime | null
 }
 
 function mealById(meals: Meal[], id: string): Meal | undefined {
@@ -78,10 +79,17 @@ export function DayRhythmTrack({
   )
 }
 
-export function DayRhythmBar({ meals, dayKey, now, linkMeals = true }: DayRhythmBarProps) {
+export function DayRhythmBar({
+  meals,
+  dayKey,
+  now,
+  linkMeals = true,
+  fastStartedAt,
+}: DayRhythmBarProps) {
   const zone = meals[0]?.tz_name || appZone()
   const rhythm = dayRhythm(meals, dayKey, zone)
-  const caption = formatDayRhythmCaption(rhythm)
+  const viewedDay = DateTime.fromISO(dayKey, { zone }).set({ hour: 12 })
+  const caption = formatDayRhythmCaption(rhythm, { fastStartedAt, now: now ?? viewedDay })
   return (
     <div className="day-rhythm">
       <DayRhythmTrack meals={meals} dayKey={dayKey} now={now} linkMeals={linkMeals} />

@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon'
-import { appZone, fromUtc, mealDayKey } from './dates.ts'
+import { appZone, formatClockOnDay, fromUtc, mealDayKey } from './dates.ts'
 import type { Meal } from './types.ts'
 
 export const DEFAULT_MEAL_DURATION_MINUTES = 15
@@ -28,9 +28,13 @@ export function mealEndedAt(meal: Meal): DateTime {
   return mealStartedAt(meal).plus({ minutes: parseDurationMinutes(meal.duration_minutes) })
 }
 
-export function fastingStartsLabel(start: DateTime, durationMinutes: number): string {
+export function fastingStartsLabel(
+  start: DateTime,
+  durationMinutes: number,
+  now: DateTime<boolean> = DateTime.local(),
+): string {
   const end = start.plus({ minutes: parseDurationMinutes(durationMinutes) })
-  return `Fasting starts ${end.toFormat('t')}`
+  return `Fasting starts ${formatClockOnDay(end, now)}`
 }
 
 export function formatFastDuration(minutes: number): string {
@@ -40,6 +44,17 @@ export function formatFastDuration(minutes: number): string {
   const rest = value % 60
   if (rest === 0) return `${hours}h`
   return `${hours}h ${rest}m`
+}
+
+export const MINUTES_PER_FAST_DAY = 24 * 60
+
+export function isMultiDayFast(minutes: number): boolean {
+  return Math.max(0, minutes) >= MINUTES_PER_FAST_DAY
+}
+
+/** 1-based day of the fast: first 24h is day 1, then day 2, and so on. */
+export function fastingDayNumber(elapsedMinutes: number): number {
+  return Math.floor(Math.max(0, elapsedMinutes) / MINUTES_PER_FAST_DAY) + 1
 }
 
 export function splitFastSeconds(totalSeconds: number): { hours: number; minutes: number; seconds: number } {
@@ -280,8 +295,16 @@ export function nowOnDayPct(now: DateTime, dayKey: string, zone = appZone()): nu
   return (local.diff(start, 'minutes').minutes / total) * 100
 }
 
-export function formatDayRhythmCaption(rhythm: DayRhythm): string {
-  if (rhythm.mealCount === 0) return 'No meals yet'
+export function formatDayRhythmCaption(
+  rhythm: DayRhythm,
+  options?: { fastStartedAt?: DateTime | null; now?: DateTime },
+): string {
+  if (rhythm.mealCount === 0) {
+    if (options?.fastStartedAt) {
+      return `No meals · fasting since ${formatClockOnDay(options.fastStartedAt, options.now)}`
+    }
+    return 'No meals yet'
+  }
   const noun = rhythm.mealCount === 1 ? 'meal' : 'meals'
   if (rhythm.mealCount <= 5 && rhythm.mealStarts.length > 0) {
     return `${rhythm.mealCount} ${noun} · ${rhythm.mealStarts.map((start) => start.toFormat('t')).join(', ')}`
