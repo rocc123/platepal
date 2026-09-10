@@ -8,6 +8,8 @@ import {
   currentFasting,
   fastingDayNumber,
   formatFastDuration,
+  formatFastingKicker,
+  formatFastingSinceLine,
   isMultiDayFast,
   mealEndedAt,
   mealStartedAt,
@@ -128,19 +130,14 @@ export function FastingCard({
     }
 
     const elapsedSeconds = Math.max(0, Math.round(now.diff(end, 'seconds').seconds))
-    const dayNumber = fastingDayNumber(status.elapsedMinutes)
     return (
       <section className="card last-ate fasting-card">
-        <p className="composer-kicker">
-          {dayNumber >= 2 ? `Fasting · day ${dayNumber}` : 'Fasting'}
-        </p>
+        <p className="composer-kicker">{formatFastingKicker(status.elapsedMinutes)}</p>
         <FastClock
           totalSeconds={elapsedSeconds}
           label={`Fasting ${formatFastDuration(status.elapsedMinutes)}`}
         />
-        <p className="muted">
-          Since {periodLabel(status.meal).toLowerCase()} {formatClockOnDay(end, now)}
-        </p>
+        <p className="muted">{formatFastingSinceLine(periodLabel(status.meal), end, now)}</p>
         {bar}
       </section>
     )
@@ -172,9 +169,7 @@ export function FastingCard({
       <section className="card last-ate fasting-card">
         <p className="composer-kicker">Fasting</p>
         <p className="last-ate-label">Fasted all day</p>
-        <p className="muted">
-          Since {periodLabel(previousMeal).toLowerCase()} {formatClockOnDay(previousEnd, viewedDay)}
-        </p>
+        <p className="muted">{formatFastingSinceLine(periodLabel(previousMeal), previousEnd, viewedDay)}</p>
         {bar}
       </section>
     )

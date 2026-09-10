@@ -7,6 +7,8 @@ import {
   fastingDayNumber,
   fastingStartsLabel,
   formatDayRhythmCaption,
+  formatFastingKicker,
+  formatFastingSinceLine,
   isMultiDayFast,
   nowOnDayPct,
   placeOnWindow,
@@ -146,6 +148,27 @@ describe('fastingStartsLabel', () => {
     const now = DateTime.fromISO('2026-09-10T16:00', { zone })
     const label = fastingStartsLabel(start, 15, now)
     assert.match(label, /Fasting starts Monday at /)
+  })
+})
+
+describe('formatFastingSinceLine', () => {
+  it('keeps a same-day last meal as a clock time', () => {
+    const ended = DateTime.fromISO('2026-09-10T14:30', { zone })
+    const now = DateTime.fromISO('2026-09-10T16:00', { zone })
+    assert.equal(formatFastingSinceLine('Dinner', ended, now), `Since dinner at ${ended.toFormat('t')}`)
+    assert.equal(formatFastingKicker(90), 'Fasting')
+  })
+
+  it('names the weekday when the last meal was a few days ago', () => {
+    const ended = DateTime.fromISO('2026-09-07T14:30', { zone })
+    const now = DateTime.fromISO('2026-09-10T16:00', { zone })
+    assert.equal(
+      formatFastingSinceLine('Dinner', ended, now),
+      `Since dinner ${ended.toFormat("cccc 'at' t")}`,
+    )
+    assert.match(formatFastingSinceLine('Dinner', ended, now), /Monday/)
+    assert.notEqual(formatFastingSinceLine('Dinner', ended, now), `Since dinner at ${ended.toFormat('t')}`)
+    assert.equal(formatFastingKicker(3 * 24 * 60 + 90), 'Fasting · day 4')
   })
 })
 

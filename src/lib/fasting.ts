@@ -57,6 +57,19 @@ export function fastingDayNumber(elapsedMinutes: number): number {
   return Math.floor(Math.max(0, elapsedMinutes) / MINUTES_PER_FAST_DAY) + 1
 }
 
+export function formatFastingKicker(elapsedMinutes: number): string {
+  const day = fastingDayNumber(elapsedMinutes)
+  return day >= 2 ? `Fasting · day ${day}` : 'Fasting'
+}
+
+export function formatFastingSinceLine(
+  periodLabel: string,
+  endedAt: DateTime,
+  now?: DateTime,
+): string {
+  return `Since ${periodLabel.toLowerCase()} ${formatClockOnDay(endedAt, now)}`
+}
+
 export function splitFastSeconds(totalSeconds: number): { hours: number; minutes: number; seconds: number } {
   const value = Math.max(0, Math.floor(totalSeconds))
   return {
