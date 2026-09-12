@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { isFreshOtpSend } from '../lib/authErrors'
 import {
   clearOtpEmail,
   completeEmailAuthFromUrl,
   onAuthChange,
-  readOtpEmail,
+  readPendingOtp,
   signInWithMagicLink,
   usingLocalData,
   verifyEmailCode,
@@ -19,14 +20,16 @@ export function LoginPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sent, setSent] = useState(false)
+  const [freshSend, setFreshSend] = useState(false)
   const [userReady, setUserReady] = useState<boolean | null>(null)
 
   useEffect(() => {
     let active = true
-    const pending = readOtpEmail()
+    const pending = readPendingOtp()
     if (pending) {
-      setEmail(pending)
+      setEmail(pending.email)
       setSent(true)
+      setFreshSend(isFreshOtpSend(pending.sentAt))
     }
     const fromGate = (location.state as { authError?: string } | null)?.authError
     if (fromGate) setError(fromGate)
@@ -81,6 +84,7 @@ export function LoginPage() {
       return
     }
     setSent(true)
+    setFreshSend(true)
     setCode('')
   }
 
@@ -108,6 +112,7 @@ export function LoginPage() {
   function resetCodeStep() {
     clearOtpEmail()
     setSent(false)
+    setFreshSend(false)
     setCode('')
     setError(null)
   }
@@ -151,8 +156,17 @@ export function LoginPage() {
           {!usingLocalData && sent ? (
             <>
               <p className="status">
-                A 6-digit code is on its way to <strong>{email}</strong>. That email is the code —
-                nothing to confirm or tap. Type the number here.
+                {freshSend ? (
+                  <>
+                    A 6-digit code is on its way to <strong>{email}</strong>. Type the number here —
+                    nothing to tap.
+                  </>
+                ) : (
+                  <>
+                    Enter the last code we sent to <strong>{email}</strong>. If you do not have it,
+                    check Junk, then tap Resend.
+                  </>
+                )}
               </p>
               <label className="field">
                 <span>Code</span>
@@ -169,6 +183,9 @@ export function LoginPage() {
                   required
                 />
               </label>
+              <p className="hint">
+                No code? Check Junk / Spam. Outlook and Hotmail often hide this email.
+              </p>
             </>
           ) : !usingLocalData ? (
             <p className="hint">

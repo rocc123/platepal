@@ -1,4 +1,5 @@
 import { createClient, type EmailOtpType, type SupabaseClient } from '@supabase/supabase-js'
+import { friendlyAuthError } from './authErrors'
 import { fromUtc, startOfLocalDay, startOfNextLocalDay, zoneStamp } from './dates'
 import { resolveSupabaseBrowserEnv } from './env'
 import { parseDurationMinutes } from './fasting'
@@ -15,6 +16,7 @@ export const usingLocalData = !supabaseUrl || !supabaseAnonKey
 const AUTH_KEY = 'plate-pal-auth'
 const DB_KEY = 'plate-pal-db'
 const OTP_EMAIL_KEY = 'plate-pal-otp-email'
+const OTP_SENT_AT_KEY = 'plate-pal-otp-sent-at'
 
 const AUTH_CALLBACK_KEYS = ['code', 'token_hash', 'access_token', 'error', 'error_description', 'error_code']
 const EMAIL_OTP_TYPES = new Set<EmailOtpType>([
@@ -215,7 +217,7 @@ export async function signInWithMagicLink(email: string): Promise<{ error?: stri
     email: trimmed,
     options: { shouldCreateUser: true },
   })
-  if (error) return { error: error.message }
+  if (error) return { error: friendlyAuthError(error.message) }
   rememberOtpEmail(trimmed)
   return {}
 }
@@ -242,25 +244,35 @@ export async function verifyEmailCode(email: string, token: string): Promise<{ e
       clearOtpEmail()
       return {}
     }
-    lastError = error.message
+    lastError = friendlyAuthError(error.message)
   }
   return { error: lastError }
 }
 
-export function rememberOtpEmail(email: string) {
+export function rememberOtpEmail(email: string, sentAt = Date.now()) {
   sessionStorage.setItem(OTP_EMAIL_KEY, email)
+  sessionStorage.setItem(OTP_SENT_AT_KEY, String(sentAt))
 }
 
-export function readOtpEmail(): string | null {
+export function readPendingOtp(): { email: string; sentAt: number | null } | null {
   try {
-    return sessionStorage.getItem(OTP_EMAIL_KEY)
+    const email = sessionStorage.getItem(OTP_EMAIL_KEY)
+    if (!email) return null
+    const raw = sessionStorage.getItem(OTP_SENT_AT_KEY)
+    const sentAt = raw ? Number(raw) : NaN
+    return { email, sentAt: Number.isFinite(sentAt) ? sentAt : null }
   } catch {
     return null
   }
 }
 
+export function readOtpEmail(): string | null {
+  return readPendingOtp()?.email ?? null
+}
+
 export function clearOtpEmail() {
   sessionStorage.removeItem(OTP_EMAIL_KEY)
+  sessionStorage.removeItem(OTP_SENT_AT_KEY)
 }
 
 export function hasAuthCallbackParams(href = window.location.href): boolean {
@@ -312,14 +324,6 @@ export async function completeEmailAuthFromUrl(): Promise<{ error?: string; user
     }
   }
   return { user: await getCurrentUser() }
-}
-
-function friendlyAuthError(message: string) {
-  const lower = message.toLowerCase()
-  if (lower.includes('pkce') || lower.includes('code verifier') || lower.includes('verifier')) {
-    return 'That email link opened in a different browser than the app. Enter the code from the email here instead.'
-  }
-  return message
 }
 
 function clearAuthParamsFromUrl() {
