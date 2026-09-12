@@ -27,6 +27,7 @@ function meal(id: string, local: string, durationMinutes: number): Meal {
     user_id: 'u1',
     eaten_at: utcIso(local),
     duration_minutes: durationMinutes,
+    name: id,
     note: null,
     source_id: 4,
     meal_period_id: 1,

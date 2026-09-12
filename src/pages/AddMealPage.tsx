@@ -20,6 +20,7 @@ import {
 import { DEFAULT_MEAL_DURATION_MINUTES, parseDurationMinutes } from '../lib/fasting'
 import { getLookups, periodById, sourceIdByCode } from '../lib/lookups'
 import { appendMealItems, blankMealItem } from '../lib/mealItems'
+import { mealNameFromItems } from '../lib/mealNames'
 import { defaultSavedMealName, itemsFromSavedMeal } from '../lib/savedMeals'
 import { portionAssumption } from '../lib/foods'
 import { createMeal, createSavedMeal, fetchSavedMeals, loadLookups } from '../lib/supabase'
@@ -44,6 +45,9 @@ export function AddMealPage() {
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [note, setNote] = useState('')
+  const [mealName, setMealName] = useState('')
+  const [mealNameTouched, setMealNameTouched] = useState(false)
+  const [analyzeTitle, setAnalyzeTitle] = useState('')
   const [items, setItems] = useState<MealItem[] | null>(null)
   const [date, setDate] = useState(() => localDateInput(initialWhen))
   const [time, setTime] = useState(() => localTimeInput(initialWhen))
@@ -64,11 +68,14 @@ export function AddMealPage() {
 
   const canAnalyze = Boolean(note.trim() || file)
   const namedCount = items?.filter((item) => item.name.trim()).length ?? 0
-  const suggestedSavedName = defaultSavedMealName(
-    items ?? [],
+  const periodLabel = periodById(periodId, lookups)?.label
+  const suggestedMealName = mealNameFromItems(items ?? [], {
+    title: analyzeTitle,
     note,
-    periodById(periodId, lookups)?.label,
-  )
+    fallback: periodLabel,
+  })
+  const resolvedMealName = mealNameTouched ? mealName : suggestedMealName
+  const suggestedSavedName = defaultSavedMealName(items ?? [], note, periodLabel)
   const resolvedSavedName = savedMealNameTouched ? savedMealName : suggestedSavedName
 
   useEffect(() => {
@@ -106,6 +113,8 @@ export function AddMealPage() {
   function applyFirstEstimate(patch: {
     items: MealItem[]
     note?: string
+    name?: string
+    title?: string
     confidence?: number | null
     assumptions?: string
     sourceCode?: 'photo' | 'text' | 'saved' | 'manual'
@@ -113,6 +122,11 @@ export function AddMealPage() {
     const addingToExisting = Boolean(items?.some((item) => item.name.trim()))
     if (!addingToExisting) {
       if (patch.note != null) setNote(patch.note)
+      if (patch.title != null) setAnalyzeTitle(patch.title)
+      if (patch.name != null) {
+        setMealName(patch.name)
+        setMealNameTouched(true)
+      }
       if (patch.confidence !== undefined) setConfidence(patch.confidence)
       if (patch.assumptions != null) setAssumptions(patch.assumptions)
       if (patch.sourceCode) setSourceId(sourceIdByCode(patch.sourceCode))
@@ -147,7 +161,8 @@ export function AddMealPage() {
   function applySavedMeal(saved: SavedMeal) {
     applyFirstEstimate({
       items: itemsFromSavedMeal(saved),
-      note: note.trim() || saved.note || saved.name,
+      note: note.trim() || saved.note || undefined,
+      name: saved.name,
       confidence: null,
       assumptions: `From saved meal “${saved.name}”. Edit anything before you log it.`,
       sourceCode: 'saved',
@@ -172,7 +187,7 @@ export function AddMealPage() {
       })
       applyFirstEstimate({
         items: result.items.length ? result.items : [blankMealItem()],
-        note: !note.trim() && result.title?.trim() ? result.title.trim() : undefined,
+        title: result.title?.trim() || undefined,
         confidence: result.confidence,
         assumptions: result.assumptions,
         sourceCode: file ? 'photo' : 'text',
@@ -211,7 +226,8 @@ export function AddMealPage() {
       const stamp = zoneStamp(dateTimeFromInputs(date, time))
       const totals = sumItems(named)
       await createMeal(user.id, {
-        note: note.trim() || named[0].name,
+        name: resolvedMealName.trim() || suggestedMealName,
+        note: note.trim() || null,
         source_id: sourceId,
         meal_period_id: periodId,
         duration_minutes: parseDurationMinutes(durationMinutes),
@@ -252,6 +268,7 @@ export function AddMealPage() {
           </p>
         </header>
         <MealEditor
+          name={resolvedMealName}
           note={note}
           items={items}
           date={date}
@@ -267,6 +284,10 @@ export function AddMealPage() {
           compactWhen
           saving={saving}
           error={error}
+          onNameChange={(next) => {
+            setMealNameTouched(true)
+            setMealName(next)
+          }}
           onNoteChange={setNote}
           onItemsChange={setItems}
           onDateChange={(next) => {
@@ -378,7 +399,6 @@ export function AddMealPage() {
               onPick={(item, hit) => {
                 applyFirstEstimate({
                   items: [item],
-                  note: note.trim() || item.name,
                   confidence: 0.7,
                   assumptions: portionAssumption('USDA FoodData Central', hit),
                   sourceCode: 'manual',
@@ -399,7 +419,6 @@ export function AddMealPage() {
               onPick={(item, nextAssumptions, confidence) => {
                 applyFirstEstimate({
                   items: [item],
-                  note: note.trim() || item.name,
                   confidence,
                   assumptions: nextAssumptions,
                   sourceCode: 'manual',

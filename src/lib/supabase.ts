@@ -26,6 +26,9 @@ const EMAIL_OTP_TYPES = new Set<EmailOtpType>([
   'email_change',
 ])
 
+/** First-time PWA sign-in may send a signup token; later visits send email/magiclink. */
+const OTP_VERIFY_TYPES: EmailOtpType[] = ['email', 'signup', 'magiclink']
+
 type LocalDb = {
   profiles: Profile[]
   meals: Meal[]
@@ -68,6 +71,7 @@ export function normalizeMeal(row: Record<string, unknown>): Meal {
     user_id: String(row.user_id),
     eaten_at,
     duration_minutes: parseDurationMinutes(row.duration_minutes as string | number | null | undefined),
+    name: String(row.name ?? '').trim(),
     note: (row.note as string | null) ?? null,
     source_id: coerceSourceId(row.source_id ?? row.source),
     meal_period_id: coercePeriodId(row.meal_period_id, eaten_at, tz_name),
@@ -227,14 +231,20 @@ export async function verifyEmailCode(email: string, token: string): Promise<{ e
     return result.error ? { error: result.error } : {}
   }
 
-  const { error } = await getSupabase().auth.verifyOtp({
-    email: trimmedEmail,
-    token: trimmedToken,
-    type: 'email',
-  })
-  if (error) return { error: error.message }
-  clearOtpEmail()
-  return {}
+  let lastError = 'That code did not work. Request a new one and enter it here.'
+  for (const type of OTP_VERIFY_TYPES) {
+    const { error } = await getSupabase().auth.verifyOtp({
+      email: trimmedEmail,
+      token: trimmedToken,
+      type,
+    })
+    if (!error) {
+      clearOtpEmail()
+      return {}
+    }
+    lastError = error.message
+  }
+  return { error: lastError }
 }
 
 export function rememberOtpEmail(email: string) {
@@ -251,10 +261,6 @@ export function readOtpEmail(): string | null {
 
 export function clearOtpEmail() {
   sessionStorage.removeItem(OTP_EMAIL_KEY)
-}
-
-export function authRedirectTo() {
-  return `${window.location.origin}/login`
 }
 
 export function hasAuthCallbackParams(href = window.location.href): boolean {
@@ -322,18 +328,6 @@ function clearAuthParamsFromUrl() {
   url.searchParams.delete('type')
   url.hash = ''
   window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}`)
-}
-
-export async function signInWithGoogle(): Promise<{ error?: string }> {
-  if (usingLocalData) {
-    return { error: 'Google sign-in needs Supabase. Add keys in .env, or use email in local mode.' }
-  }
-  const { error } = await getSupabase().auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo: authRedirectTo() },
-  })
-  if (error) return { error: error.message }
-  return {}
 }
 
 export async function signOut(): Promise<void> {
@@ -497,6 +491,7 @@ export async function fetchMealWithItems(
 }
 
 type MealWrite = {
+  name: string
   note: string | null
   source_id: number
   meal_period_id: number
@@ -544,6 +539,7 @@ export async function createMeal(userId: string, input: MealWrite): Promise<{ id
       user_id: userId,
       eaten_at: input.eaten_at,
       duration_minutes: parseDurationMinutes(input.duration_minutes),
+      name: input.name.trim(),
       note: input.note,
       source_id: input.source_id,
       meal_period_id: input.meal_period_id,
@@ -569,6 +565,7 @@ export async function createMeal(userId: string, input: MealWrite): Promise<{ id
       user_id: userId,
       eaten_at: input.eaten_at,
       duration_minutes: parseDurationMinutes(input.duration_minutes),
+      name: input.name.trim(),
       note: input.note,
       source_id: input.source_id,
       meal_period_id: input.meal_period_id,
@@ -599,6 +596,7 @@ export async function updateMeal(mealId: string, userId: string, input: MealWrit
     if (index === -1) throw new Error('Meal not found.')
     db.meals[index] = {
       ...db.meals[index],
+      name: input.name.trim(),
       note: input.note,
       source_id: input.source_id,
       meal_period_id: input.meal_period_id,
@@ -624,6 +622,7 @@ export async function updateMeal(mealId: string, userId: string, input: MealWrit
   const { error } = await getSupabase()
     .from('meals')
     .update({
+      name: input.name.trim(),
       note: input.note,
       source_id: input.source_id,
       meal_period_id: input.meal_period_id,

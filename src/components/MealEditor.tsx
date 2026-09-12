@@ -10,6 +10,7 @@ import { formatFocusLine, formatOtherLine, sumItems } from '../lib/totals'
 import type { MealItem } from '../lib/types'
 
 type MealEditorProps = {
+  name: string
   note: string
   items: MealItem[]
   date: string
@@ -25,6 +26,7 @@ type MealEditorProps = {
   compactWhen?: boolean
   saving: boolean
   error: string | null
+  onNameChange: (name: string) => void
   onNoteChange: (note: string) => void
   onItemsChange: (items: MealItem[]) => void
   onDateChange: (date: string) => void
@@ -61,6 +63,7 @@ function extrasPreview(item: MealItem): string {
 }
 
 export function MealEditor({
+  name,
   note,
   items,
   date,
@@ -76,6 +79,7 @@ export function MealEditor({
   compactWhen = false,
   saving,
   error,
+  onNameChange,
   onNoteChange,
   onItemsChange,
   onDateChange,
@@ -121,13 +125,23 @@ export function MealEditor({
       />
 
       <label className="field">
+        <span>Meal name</span>
+        <input
+          type="text"
+          value={name}
+          onChange={(event) => onNameChange(event.target.value)}
+          placeholder="Chicken rice bowl"
+        />
+      </label>
+
+      <label className="field">
         <span>
           Note <em>optional</em>
         </span>
         <textarea
           value={note}
           onChange={(event) => onNoteChange(event.target.value)}
-          placeholder="1/3 cup oats + 2 eggs"
+          placeholder="No bun, extra broccoli"
         />
       </label>
 
@@ -148,7 +162,7 @@ export function MealEditor({
             className="text-action combine-all"
             onClick={() => {
               const named = items.filter((row) => row.name.trim())
-              onItemsChange([mergeMealItems(named, note.trim() || undefined)])
+              onItemsChange([mergeMealItems(named, name.trim() || note.trim() || undefined)])
             }}
           >
             Combine into one food

@@ -5,6 +5,7 @@ import { useUser } from '../components/AuthGate'
 import { dateTimeFromInputs, fromUtc, inferPeriodFromWhen, localDateInput, localTimeInput, zoneStamp } from '../lib/dates'
 import { DEFAULT_MEAL_DURATION_MINUTES, parseDurationMinutes } from '../lib/fasting'
 import { getLookups, periodById } from '../lib/lookups'
+import { mealNameFromItems } from '../lib/mealNames'
 import { defaultSavedMealName } from '../lib/savedMeals'
 import { createSavedMeal, deleteMeal, fetchMealWithItems, loadLookups, updateMeal } from '../lib/supabase'
 import { sumItems } from '../lib/totals'
@@ -16,6 +17,8 @@ export function EditMealPage() {
   const navigate = useNavigate()
   const [meal, setMeal] = useState<Meal | null>(null)
   const [note, setNote] = useState('')
+  const [mealName, setMealName] = useState('')
+  const [mealNameTouched, setMealNameTouched] = useState(false)
   const [items, setItems] = useState<MealItem[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -41,6 +44,8 @@ export function EditMealPage() {
           return
         }
         setMeal(row.meal)
+        setMealName(row.meal.name ?? '')
+        setMealNameTouched(Boolean(row.meal.name?.trim()))
         setNote(row.meal.note ?? '')
         setItems(row.items)
         const when = fromUtc(row.meal.eaten_at, row.meal.tz_name)
@@ -65,6 +70,14 @@ export function EditMealPage() {
     loadLookups().then(setLookupsState)
   }, [])
 
+  const suggestedSavedName = defaultSavedMealName(items, note, periodById(periodId, lookups)?.label)
+  const resolvedSavedName = savedMealNameTouched ? savedMealName : suggestedSavedName
+  const suggestedMealName = mealNameFromItems(items, {
+    note,
+    fallback: periodById(periodId, lookups)?.label,
+  })
+  const resolvedMealName = mealNameTouched ? mealName : suggestedMealName
+
   async function onSave() {
     if (!meal) return
     const named = items.filter((item) => item.name.trim())
@@ -78,7 +91,8 @@ export function EditMealPage() {
       const totals = sumItems(named)
       const stamp = zoneStamp(dateTimeFromInputs(date, time))
       await updateMeal(meal.id, user.id, {
-        note: note.trim() || named[0].name,
+        name: resolvedMealName.trim() || suggestedMealName,
+        note: note.trim() || null,
         source_id: meal.source_id,
         meal_period_id: periodId,
         duration_minutes: parseDurationMinutes(durationMinutes),
@@ -106,9 +120,6 @@ export function EditMealPage() {
       setSaving(false)
     }
   }
-
-  const suggestedSavedName = defaultSavedMealName(items, note, periodById(periodId, lookups)?.label)
-  const resolvedSavedName = savedMealNameTouched ? savedMealName : suggestedSavedName
 
   async function onSaveAsSavedMeal() {
     const named = items.filter((item) => item.name.trim())
@@ -154,6 +165,7 @@ export function EditMealPage() {
       <h1>Edit meal</h1>
       {status ? <p className="status">{status}</p> : null}
       <MealEditor
+        name={resolvedMealName}
         note={note}
         items={items}
         date={date}
@@ -168,6 +180,10 @@ export function EditMealPage() {
         savedMealName={resolvedSavedName}
         saving={saving}
         error={error}
+        onNameChange={(next) => {
+          setMealNameTouched(true)
+          setMealName(next)
+        }}
         onNoteChange={setNote}
         onItemsChange={setItems}
         onDateChange={(next) => {
