@@ -32,7 +32,7 @@ VITE_SUPABASE_ANON_KEY=
 ```
 
 2. In the Supabase project, run `supabase/migrations/0001_init.sql`, then `0002_lookups_and_timezone.sql`, then `0003_meal_duration.sql`, then `0004_portion_units.sql`, then `0005_meal_name.sql`.
-3. Turn on email OTP. **Confirm email** should be off — the code is the confirmation. The Magic Link and Confirm signup templates must use `{{ .Token }}` (a code), not `{{ .ConfirmationURL }}` (a link). Home screen apps cannot sign in from an email link. Add the Vite origin, `/login`, and the production host to Site URL + Redirect URLs.
+3. Turn on email OTP. **Confirm email** should be off — the code is the confirmation. The Magic Link and Confirm signup templates must use `{{ .Token }}` (a code), not `{{ .ConfirmationURL }}` (a link). Home screen apps cannot sign in from an email link. Add the Vite origin, `/login`, and the production host to Site URL + Redirect URLs. Outlook and Hotmail often put the default Supabase mailer in Junk — custom SMTP helps if codes never arrive.
 4. Deploy the `analyze` Edge Function and set secrets:
 
 ```
