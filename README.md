@@ -71,7 +71,7 @@ Or do it from an existing clone:
 2. In the Vercel project: **Storage → Create Database → Supabase** (or `npx vercel integration add supabase` after `npx vercel link`).
 3. Marketplace syncs `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. The Vite build maps those onto the client automatically. Redeploy after the database is connected — Vite bakes public keys in at **build** time.
 4. Open **Supabase Studio** from the Vercel Storage page. In the SQL Editor, run `supabase/migrations/0001_init.sql`, then `0002_lookups_and_timezone.sql`, then `0003_meal_duration.sql`, then `0004_portion_units.sql`, then `0005_meal_name.sql`.
-5. **Authentication → Providers → Email**: leave magic link / OTP on. Turn **Confirm email** off so the first email is the code, not a confirm-then-code dance.
+5. **Authentication → Providers → Email**: leave magic link / OTP on. Turn **Confirm email** off so the first email is the code, not a confirm-then-code dance. Users created while Confirm email was on stay unconfirmed — Confirm or Delete them under **Authentication → Users** or they cannot finish sign-in.
 6. **Authentication → Email Templates → Magic Link** and **Confirm signup**: use `{{ .Token }}` only. Do not include `{{ .ConfirmationURL }}`. The app still sends a redirect URL so Supabase will mail the message; the template is what makes it a typed code. Email links open in the browser and will not sign the installed PWA in. The live templates are in `supabase/templates/`.
 7. **Authentication → URL Configuration**:
    - Site URL: `https://your-app.vercel.app`

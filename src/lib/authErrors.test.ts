@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { authRedirectTo, emailOtpRequestOptions, friendlyAuthError, isFreshOtpSend } from './authErrors.ts'
+import {
+  authRedirectTo,
+  emailOtpRequestOptions,
+  friendlyAuthError,
+  isFreshOtpSend,
+  isLeftoverUnconfirmedAuthError,
+  shouldResendSignupConfirmation,
+} from './authErrors.ts'
 
 describe('friendlyAuthError', () => {
   it('explains a PKCE mismatch from an email link', () => {
@@ -28,6 +35,17 @@ describe('friendlyAuthError', () => {
     assert.equal(friendlyAuthError('Token has expired or is invalid'), 'Token has expired or is invalid')
   })
 
+  it('explains a leftover unconfirmed signup', () => {
+    assert.equal(
+      friendlyAuthError('User already registered'),
+      'This email started sign-in but never finished. Confirm or delete that user in Supabase Authentication → Users, then tap Email me a code again.',
+    )
+    assert.equal(
+      friendlyAuthError('Email not confirmed'),
+      'This email started sign-in but never finished. Confirm or delete that user in Supabase Authentication → Users, then tap Email me a code again.',
+    )
+  })
+
   it('explains a blocked redirect URL', () => {
     assert.equal(
       friendlyAuthError('redirect not allowed for this request'),
@@ -43,6 +61,22 @@ describe('emailOtpRequestOptions', () => {
       emailRedirectTo: 'https://platepal-quavico.vercel.app/login',
     })
     assert.equal(authRedirectTo('https://app.example.com/'), 'https://app.example.com/login')
+  })
+})
+
+describe('leftover unconfirmed signup', () => {
+  it('detects the GoTrue errors for an unfinished first-time email', () => {
+    assert.equal(isLeftoverUnconfirmedAuthError('User already registered'), true)
+    assert.equal(isLeftoverUnconfirmedAuthError('user_already_exists'), true)
+    assert.equal(isLeftoverUnconfirmedAuthError('Email not confirmed'), true)
+    assert.equal(isLeftoverUnconfirmedAuthError('Token has expired or is invalid'), false)
+  })
+
+  it('resends a signup confirmation only for those leftover errors', () => {
+    assert.equal(shouldResendSignupConfirmation('User already registered'), true)
+    assert.equal(shouldResendSignupConfirmation('Email not confirmed'), true)
+    assert.equal(shouldResendSignupConfirmation('For security purposes, you can only request this after 42 seconds.'), false)
+    assert.equal(shouldResendSignupConfirmation(null), false)
   })
 })
 

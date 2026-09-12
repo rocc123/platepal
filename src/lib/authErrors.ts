@@ -22,10 +22,33 @@ export function friendlyAuthError(message: string): string {
   if (lower.includes('signups not allowed') || lower.includes('signup is disabled')) {
     return 'This email is not set up for Plate Pal yet.'
   }
+  if (isLeftoverUnconfirmedAuthError(message)) {
+    return leftoverUnconfirmedMessage
+  }
   if (lower.includes('redirect') && (lower.includes('not allowed') || lower.includes('invalid') || lower.includes('not allowlisted'))) {
     return 'This app address is not allowed for sign-in email. Add it under Supabase Authentication → URL Configuration → Redirect URLs.'
   }
   return message
+}
+
+const leftoverUnconfirmedMessage =
+  'This email started sign-in but never finished. Confirm or delete that user in Supabase Authentication → Users, then tap Email me a code again.'
+
+/** Unconfirmed leftover from an earlier Confirm-email signup. OTP treats them as new and can refuse to send. */
+export function isLeftoverUnconfirmedAuthError(message: string): boolean {
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('already registered') ||
+    lower.includes('already exists') ||
+    lower.includes('user_already_exists') ||
+    lower.includes('email not confirmed') ||
+    lower.includes('email_not_confirmed')
+  )
+}
+
+/** After signInWithOtp fails, leftover accounts need a signup confirmation resend, not another new-user OTP. */
+export function shouldResendSignupConfirmation(errorMessage: string | null | undefined): boolean {
+  return typeof errorMessage === 'string' && isLeftoverUnconfirmedAuthError(errorMessage)
 }
 
 /** GoTrue only sends the email when a redirect URL is present. The template decides code vs link. */

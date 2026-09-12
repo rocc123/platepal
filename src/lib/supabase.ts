@@ -1,5 +1,5 @@
 import { createClient, type EmailOtpType, type SupabaseClient } from '@supabase/supabase-js'
-import { emailOtpRequestOptions, friendlyAuthError } from './authErrors'
+import { emailOtpRequestOptions, friendlyAuthError, shouldResendSignupConfirmation } from './authErrors'
 import { fromUtc, startOfLocalDay, startOfNextLocalDay, zoneStamp } from './dates'
 import { resolveSupabaseBrowserEnv } from './env'
 import { parseDurationMinutes } from './fasting'
@@ -213,13 +213,31 @@ export async function signInWithMagicLink(email: string): Promise<{ error?: stri
     return { local: true }
   }
 
+  const otpOptions = emailOtpRequestOptions(window.location.origin)
   const { error } = await getSupabase().auth.signInWithOtp({
     email: trimmed,
-    options: emailOtpRequestOptions(window.location.origin),
+    options: otpOptions,
   })
-  if (error) return { error: friendlyAuthError(error.message) }
-  rememberOtpEmail(trimmed)
-  return {}
+  if (!error) {
+    rememberOtpEmail(trimmed)
+    return {}
+  }
+  // Yesterday's unfinished signups stay unconfirmed. GoTrue then treats them as a
+  // new signup and can return "already registered" / "email not confirmed" instead
+  // of mailing a usable code. Resend the signup token so verifyOtp(type: signup) works.
+  if (shouldResendSignupConfirmation(error.message)) {
+    const resend = await getSupabase().auth.resend({
+      type: 'signup',
+      email: trimmed,
+      options: { emailRedirectTo: otpOptions.emailRedirectTo },
+    })
+    if (!resend.error) {
+      rememberOtpEmail(trimmed)
+      return {}
+    }
+    return { error: friendlyAuthError(resend.error.message) }
+  }
+  return { error: friendlyAuthError(error.message) }
 }
 
 export async function verifyEmailCode(email: string, token: string): Promise<{ error?: string }> {
