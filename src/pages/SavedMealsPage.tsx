@@ -50,7 +50,8 @@ export function SavedMealsPage() {
       const items = itemsFromSavedMeal(saved)
       const when = nowLocal()
       await createMeal(user.id, {
-        note: saved.note || saved.name,
+        name: saved.name,
+        note: saved.note || null,
         source_id: sourceIdByCode('saved'),
         meal_period_id: inferPeriodFromWhen(when),
         duration_minutes: DEFAULT_MEAL_DURATION_MINUTES,
