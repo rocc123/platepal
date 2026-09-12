@@ -1,4 +1,5 @@
 import { NavLink, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
+import { Analytics } from '@vercel/analytics/react'
 import { AuthGate } from './components/AuthGate'
 import { AddMealPage } from './pages/AddMealPage'
 import { EditMealPage } from './pages/EditMealPage'
@@ -55,23 +56,26 @@ function Shell() {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route
-        element={
-          <AuthGate>
-            <Shell />
-          </AuthGate>
-        }
-      >
-        <Route path="/" element={<TodayPage />} />
-        <Route path="/add" element={<AddMealPage />} />
-        <Route path="/meals/:id" element={<EditMealPage />} />
-        <Route path="/charts" element={<ChartsPage />} />
-        <Route path="/saved" element={<SavedMealsPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          element={
+            <AuthGate>
+              <Shell />
+            </AuthGate>
+          }
+        >
+          <Route path="/" element={<TodayPage />} />
+          <Route path="/add" element={<AddMealPage />} />
+          <Route path="/meals/:id" element={<EditMealPage />} />
+          <Route path="/charts" element={<ChartsPage />} />
+          <Route path="/saved" element={<SavedMealsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+      <Analytics />
+    </>
   )
 }
