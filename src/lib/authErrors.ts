@@ -22,7 +22,22 @@ export function friendlyAuthError(message: string): string {
   if (lower.includes('signups not allowed') || lower.includes('signup is disabled')) {
     return 'This email is not set up for Plate Pal yet.'
   }
+  if (lower.includes('redirect') && (lower.includes('not allowed') || lower.includes('invalid') || lower.includes('not allowlisted'))) {
+    return 'This app address is not allowed for sign-in email. Add it under Supabase Authentication → URL Configuration → Redirect URLs.'
+  }
   return message
+}
+
+/** GoTrue only sends the email when a redirect URL is present. The template decides code vs link. */
+export function authRedirectTo(origin: string): string {
+  return `${origin.replace(/\/$/, '')}/login`
+}
+
+export function emailOtpRequestOptions(origin: string) {
+  return {
+    shouldCreateUser: true,
+    emailRedirectTo: authRedirectTo(origin),
+  }
 }
 
 const FRESH_OTP_MS = 2 * 60 * 1000

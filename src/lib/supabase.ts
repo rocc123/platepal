@@ -1,5 +1,5 @@
 import { createClient, type EmailOtpType, type SupabaseClient } from '@supabase/supabase-js'
-import { friendlyAuthError } from './authErrors'
+import { emailOtpRequestOptions, friendlyAuthError } from './authErrors'
 import { fromUtc, startOfLocalDay, startOfNextLocalDay, zoneStamp } from './dates'
 import { resolveSupabaseBrowserEnv } from './env'
 import { parseDurationMinutes } from './fasting'
@@ -215,7 +215,7 @@ export async function signInWithMagicLink(email: string): Promise<{ error?: stri
 
   const { error } = await getSupabase().auth.signInWithOtp({
     email: trimmed,
-    options: { shouldCreateUser: true },
+    options: emailOtpRequestOptions(window.location.origin),
   })
   if (error) return { error: friendlyAuthError(error.message) }
   rememberOtpEmail(trimmed)

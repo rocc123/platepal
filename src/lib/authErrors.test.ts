@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { friendlyAuthError, isFreshOtpSend } from './authErrors.ts'
+import { authRedirectTo, emailOtpRequestOptions, friendlyAuthError, isFreshOtpSend } from './authErrors.ts'
 
 describe('friendlyAuthError', () => {
   it('explains a PKCE mismatch from an email link', () => {
@@ -26,6 +26,23 @@ describe('friendlyAuthError', () => {
 
   it('passes through an unknown message', () => {
     assert.equal(friendlyAuthError('Token has expired or is invalid'), 'Token has expired or is invalid')
+  })
+
+  it('explains a blocked redirect URL', () => {
+    assert.equal(
+      friendlyAuthError('redirect not allowed for this request'),
+      'This app address is not allowed for sign-in email. Add it under Supabase Authentication → URL Configuration → Redirect URLs.',
+    )
+  })
+})
+
+describe('emailOtpRequestOptions', () => {
+  it('sends a login redirect so Supabase actually emails the code', () => {
+    assert.deepEqual(emailOtpRequestOptions('https://platepal-quavico.vercel.app'), {
+      shouldCreateUser: true,
+      emailRedirectTo: 'https://platepal-quavico.vercel.app/login',
+    })
+    assert.equal(authRedirectTo('https://app.example.com/'), 'https://app.example.com/login')
   })
 })
 
