@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   clearOtpEmail,
@@ -14,6 +14,7 @@ import {
 export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
+  const codeInput = useRef<HTMLInputElement>(null)
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
@@ -53,6 +54,12 @@ export function LoginPage() {
     }
   }, [navigate, location.state])
 
+  useEffect(() => {
+    if (!sent || usingLocalData) return
+    const timer = window.setTimeout(() => codeInput.current?.focus(), 1200)
+    return () => window.clearTimeout(timer)
+  }, [sent])
+
   if (userReady === null) {
     return (
       <div className="login">
@@ -75,15 +82,19 @@ export function LoginPage() {
       return
     }
     setSent(true)
+    setCode('')
   }
 
   async function onEmail(event: FormEvent) {
     event.preventDefault()
+    if (sent) {
+      await onVerify()
+      return
+    }
     await sendEmail()
   }
 
-  async function onCode(event: FormEvent) {
-    event.preventDefault()
+  async function onVerify() {
     setBusy(true)
     setError(null)
     const result = await verifyEmailCode(email, code)
@@ -103,7 +114,7 @@ export function LoginPage() {
     if (result.error) setError(result.error)
   }
 
-  function useDifferentEmail() {
+  function resetCodeStep() {
     clearOtpEmail()
     setSent(false)
     setCode('')
@@ -130,62 +141,74 @@ export function LoginPage() {
           </p>
         ) : null}
 
-        {sent && !usingLocalData ? (
-          <form className="card page" onSubmit={onCode}>
-            <p className="status">
-              We emailed a sign-in code to <strong>{email}</strong>. Enter it here. If you added
-              Plate Pal to your home screen, skip the email link — it opens in the browser and
-              cannot sign this app in.
+        <form className="card page" onSubmit={onEmail}>
+          <label className="field">
+            <span>Email</span>
+            <input
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(event) => {
+                setEmail(event.target.value)
+                if (sent) resetCodeStep()
+              }}
+              placeholder="you@example.com"
+              required
+            />
+          </label>
+
+          {!usingLocalData && sent ? (
+            <>
+              <p className="status">
+                A 6-digit code is on its way to <strong>{email}</strong>. That email is the code —
+                nothing to confirm or tap. Type the number here.
+              </p>
+              <label className="field">
+                <span>Code</span>
+                <input
+                  ref={codeInput}
+                  className="otp-input"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  name="one-time-code"
+                  value={code}
+                  onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 8))}
+                  placeholder="123456"
+                  required
+                />
+              </label>
+            </>
+          ) : !usingLocalData ? (
+            <p className="hint">
+              We email a number you type in this app. Home-screen installs cannot use an email link.
             </p>
-            <label className="field">
-              <span>Code</span>
-              <input
-                className="otp-input"
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                autoFocus
-                value={code}
-                onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 8))}
-                placeholder="123456"
-                required
-              />
-            </label>
+          ) : null}
+
+          {sent && !usingLocalData ? (
             <button className="btn" type="submit" disabled={busy || code.length < 6}>
-              Sign in
+              {busy ? 'Signing in…' : 'Sign in'}
             </button>
+          ) : (
+            <button className="btn" type="submit" disabled={busy}>
+              {usingLocalData ? 'Continue' : busy ? 'Sending…' : 'Email me a code'}
+            </button>
+          )}
+
+          {sent && !usingLocalData ? (
             <button className="btn-secondary" type="button" disabled={busy} onClick={() => void sendEmail()}>
               Resend code
             </button>
-            <button className="btn-secondary" type="button" disabled={busy} onClick={useDifferentEmail}>
-              Use a different email
+          ) : null}
+
+          {!usingLocalData && !sent ? (
+            <button className="btn-secondary" type="button" disabled={busy} onClick={onGoogle}>
+              Continue with Google
             </button>
-            {error ? <p className="error">{error}</p> : null}
-          </form>
-        ) : (
-          <form className="card page" onSubmit={onEmail}>
-            <label className="field">
-              <span>Email</span>
-              <input
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="you@example.com"
-                required
-              />
-            </label>
-            <button className="btn" type="submit" disabled={busy}>
-              {usingLocalData ? 'Continue' : 'Email me a code'}
-            </button>
-            {!usingLocalData ? (
-              <button className="btn-secondary" type="button" disabled={busy} onClick={onGoogle}>
-                Continue with Google
-              </button>
-            ) : null}
-            {error ? <p className="error">{error}</p> : null}
-          </form>
-        )}
+          ) : null}
+
+          {error ? <p className="error">{error}</p> : null}
+        </form>
       </div>
     </div>
   )
