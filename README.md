@@ -32,7 +32,7 @@ VITE_SUPABASE_ANON_KEY=
 ```
 
 2. In the Supabase project, run `supabase/migrations/0001_init.sql`, then `0002_lookups_and_timezone.sql`, then `0003_meal_duration.sql`, then `0004_portion_units.sql`, then `0005_meal_name.sql`.
-3. Turn on email OTP. **Confirm email** should be off — the code is the confirmation. The Magic Link and Confirm signup templates must use `{{ .Token }}` (a code), not `{{ .ConfirmationURL }}` (a link). Home screen apps cannot sign in from an email link. Google OAuth is optional. Add the Vite origin, `/login`, and the production host to Site URL + Redirect URLs.
+3. Turn on email OTP. **Confirm email** should be off — the code is the confirmation. The Magic Link and Confirm signup templates must use `{{ .Token }}` (a code), not `{{ .ConfirmationURL }}` (a link). Home screen apps cannot sign in from an email link. Add the Vite origin, `/login`, and the production host to Site URL + Redirect URLs.
 4. Deploy the `analyze` Edge Function and set secrets:
 
 ```
@@ -101,7 +101,7 @@ Netlify works too: same `dist` output, and `public/_redirects` is already in the
 
 ## What is in v1
 
-- Sign in (email code, optional Google, or local email)
+- Sign in (email code, or local email when Supabase keys are missing)
 - Today: protein bar, fiber bar, current fast, a 24-hour eating/fasting bar, meals for the local calendar day
 - Add / edit / delete meals, with a 15-minute eating duration so fasting starts when the meal ends
 - Analyze a photo or note (or enter a meal by hand). Photos of plates and recipes are named as a dish, not a grocery list.

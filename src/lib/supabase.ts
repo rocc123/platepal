@@ -263,10 +263,6 @@ export function clearOtpEmail() {
   sessionStorage.removeItem(OTP_EMAIL_KEY)
 }
 
-export function authRedirectTo() {
-  return `${window.location.origin}/login`
-}
-
 export function hasAuthCallbackParams(href = window.location.href): boolean {
   const url = new URL(href)
   const hash = new URLSearchParams(url.hash.replace(/^#/, ''))
@@ -332,18 +328,6 @@ function clearAuthParamsFromUrl() {
   url.searchParams.delete('type')
   url.hash = ''
   window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}`)
-}
-
-export async function signInWithGoogle(): Promise<{ error?: string }> {
-  if (usingLocalData) {
-    return { error: 'Google sign-in needs Supabase. Add keys in .env, or use email in local mode.' }
-  }
-  const { error } = await getSupabase().auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo: authRedirectTo() },
-  })
-  if (error) return { error: error.message }
-  return {}
 }
 
 export async function signOut(): Promise<void> {

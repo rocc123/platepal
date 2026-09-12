@@ -5,7 +5,6 @@ import {
   completeEmailAuthFromUrl,
   onAuthChange,
   readOtpEmail,
-  signInWithGoogle,
   signInWithMagicLink,
   usingLocalData,
   verifyEmailCode,
@@ -106,14 +105,6 @@ export function LoginPage() {
     navigate('/', { replace: true })
   }
 
-  async function onGoogle() {
-    setBusy(true)
-    setError(null)
-    const result = await signInWithGoogle()
-    setBusy(false)
-    if (result.error) setError(result.error)
-  }
-
   function resetCodeStep() {
     clearOtpEmail()
     setSent(false)
@@ -198,12 +189,6 @@ export function LoginPage() {
           {sent && !usingLocalData ? (
             <button className="btn-secondary" type="button" disabled={busy} onClick={() => void sendEmail()}>
               Resend code
-            </button>
-          ) : null}
-
-          {!usingLocalData && !sent ? (
-            <button className="btn-secondary" type="button" disabled={busy} onClick={onGoogle}>
-              Continue with Google
             </button>
           ) : null}
 
