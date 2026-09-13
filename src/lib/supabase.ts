@@ -1,9 +1,11 @@
 import { createClient, type EmailOtpType, type SupabaseClient } from '@supabase/supabase-js'
+import { emailOtpRequestOptions, friendlyAuthError, shouldResendSignupConfirmation } from './authErrors'
 import { fromUtc, startOfLocalDay, startOfNextLocalDay, zoneStamp } from './dates'
 import { resolveSupabaseBrowserEnv } from './env'
 import { parseDurationMinutes } from './fasting'
 import { LOOKUP_SEED, inferPeriodId, setLookups, sourceIdByCode, type Lookups } from './lookups'
 import { ensurePortion } from './portions'
+import { uniquePreviousFoods, type PreviousFood } from './previousFoods'
 import type { Meal, MealItem, MealPeriodRow, MealSourceRow, Profile, SavedMeal, SessionUser } from './types'
 
 const { url: supabaseUrl, anonKey: supabaseAnonKey } = resolveSupabaseBrowserEnv(
@@ -15,6 +17,7 @@ export const usingLocalData = !supabaseUrl || !supabaseAnonKey
 const AUTH_KEY = 'plate-pal-auth'
 const DB_KEY = 'plate-pal-db'
 const OTP_EMAIL_KEY = 'plate-pal-otp-email'
+const OTP_SENT_AT_KEY = 'plate-pal-otp-sent-at'
 
 const AUTH_CALLBACK_KEYS = ['code', 'token_hash', 'access_token', 'error', 'error_description', 'error_code']
 const EMAIL_OTP_TYPES = new Set<EmailOtpType>([
@@ -25,6 +28,9 @@ const EMAIL_OTP_TYPES = new Set<EmailOtpType>([
   'invite',
   'email_change',
 ])
+
+/** First-time PWA sign-in may send a signup token; later visits send email/magiclink. */
+const OTP_VERIFY_TYPES: EmailOtpType[] = ['email', 'signup', 'magiclink']
 
 type LocalDb = {
   profiles: Profile[]
@@ -68,6 +74,7 @@ export function normalizeMeal(row: Record<string, unknown>): Meal {
     user_id: String(row.user_id),
     eaten_at,
     duration_minutes: parseDurationMinutes(row.duration_minutes as string | number | null | undefined),
+    name: String(row.name ?? '').trim(),
     note: (row.note as string | null) ?? null,
     source_id: coerceSourceId(row.source_id ?? row.source),
     meal_period_id: coercePeriodId(row.meal_period_id, eaten_at, tz_name),
@@ -207,13 +214,31 @@ export async function signInWithMagicLink(email: string): Promise<{ error?: stri
     return { local: true }
   }
 
+  const otpOptions = emailOtpRequestOptions(window.location.origin)
   const { error } = await getSupabase().auth.signInWithOtp({
     email: trimmed,
-    options: { shouldCreateUser: true },
+    options: otpOptions,
   })
-  if (error) return { error: error.message }
-  rememberOtpEmail(trimmed)
-  return {}
+  if (!error) {
+    rememberOtpEmail(trimmed)
+    return {}
+  }
+  // Yesterday's unfinished signups stay unconfirmed. GoTrue then treats them as a
+  // new signup and can return "already registered" / "email not confirmed" instead
+  // of mailing a usable code. Resend the signup token so verifyOtp(type: signup) works.
+  if (shouldResendSignupConfirmation(error.message)) {
+    const resend = await getSupabase().auth.resend({
+      type: 'signup',
+      email: trimmed,
+      options: { emailRedirectTo: otpOptions.emailRedirectTo },
+    })
+    if (!resend.error) {
+      rememberOtpEmail(trimmed)
+      return {}
+    }
+    return { error: friendlyAuthError(resend.error.message) }
+  }
+  return { error: friendlyAuthError(error.message) }
 }
 
 export async function verifyEmailCode(email: string, token: string): Promise<{ error?: string }> {
@@ -227,34 +252,46 @@ export async function verifyEmailCode(email: string, token: string): Promise<{ e
     return result.error ? { error: result.error } : {}
   }
 
-  const { error } = await getSupabase().auth.verifyOtp({
-    email: trimmedEmail,
-    token: trimmedToken,
-    type: 'email',
-  })
-  if (error) return { error: error.message }
-  clearOtpEmail()
-  return {}
+  let lastError = 'That code did not work. Request a new one and enter it here.'
+  for (const type of OTP_VERIFY_TYPES) {
+    const { error } = await getSupabase().auth.verifyOtp({
+      email: trimmedEmail,
+      token: trimmedToken,
+      type,
+    })
+    if (!error) {
+      clearOtpEmail()
+      return {}
+    }
+    lastError = friendlyAuthError(error.message)
+  }
+  return { error: lastError }
 }
 
-export function rememberOtpEmail(email: string) {
+export function rememberOtpEmail(email: string, sentAt = Date.now()) {
   sessionStorage.setItem(OTP_EMAIL_KEY, email)
+  sessionStorage.setItem(OTP_SENT_AT_KEY, String(sentAt))
 }
 
-export function readOtpEmail(): string | null {
+export function readPendingOtp(): { email: string; sentAt: number | null } | null {
   try {
-    return sessionStorage.getItem(OTP_EMAIL_KEY)
+    const email = sessionStorage.getItem(OTP_EMAIL_KEY)
+    if (!email) return null
+    const raw = sessionStorage.getItem(OTP_SENT_AT_KEY)
+    const sentAt = raw ? Number(raw) : NaN
+    return { email, sentAt: Number.isFinite(sentAt) ? sentAt : null }
   } catch {
     return null
   }
 }
 
-export function clearOtpEmail() {
-  sessionStorage.removeItem(OTP_EMAIL_KEY)
+export function readOtpEmail(): string | null {
+  return readPendingOtp()?.email ?? null
 }
 
-export function authRedirectTo() {
-  return `${window.location.origin}/login`
+export function clearOtpEmail() {
+  sessionStorage.removeItem(OTP_EMAIL_KEY)
+  sessionStorage.removeItem(OTP_SENT_AT_KEY)
 }
 
 export function hasAuthCallbackParams(href = window.location.href): boolean {
@@ -308,32 +345,12 @@ export async function completeEmailAuthFromUrl(): Promise<{ error?: string; user
   return { user: await getCurrentUser() }
 }
 
-function friendlyAuthError(message: string) {
-  const lower = message.toLowerCase()
-  if (lower.includes('pkce') || lower.includes('code verifier') || lower.includes('verifier')) {
-    return 'That email link opened in a different browser than the app. Enter the code from the email here instead.'
-  }
-  return message
-}
-
 function clearAuthParamsFromUrl() {
   const url = new URL(window.location.href)
   for (const key of AUTH_CALLBACK_KEYS) url.searchParams.delete(key)
   url.searchParams.delete('type')
   url.hash = ''
   window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}`)
-}
-
-export async function signInWithGoogle(): Promise<{ error?: string }> {
-  if (usingLocalData) {
-    return { error: 'Google sign-in needs Supabase. Add keys in .env, or use email in local mode.' }
-  }
-  const { error } = await getSupabase().auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo: authRedirectTo() },
-  })
-  if (error) return { error: error.message }
-  return {}
 }
 
 export async function signOut(): Promise<void> {
@@ -497,6 +514,7 @@ export async function fetchMealWithItems(
 }
 
 type MealWrite = {
+  name: string
   note: string | null
   source_id: number
   meal_period_id: number
@@ -544,6 +562,7 @@ export async function createMeal(userId: string, input: MealWrite): Promise<{ id
       user_id: userId,
       eaten_at: input.eaten_at,
       duration_minutes: parseDurationMinutes(input.duration_minutes),
+      name: input.name.trim(),
       note: input.note,
       source_id: input.source_id,
       meal_period_id: input.meal_period_id,
@@ -569,6 +588,7 @@ export async function createMeal(userId: string, input: MealWrite): Promise<{ id
       user_id: userId,
       eaten_at: input.eaten_at,
       duration_minutes: parseDurationMinutes(input.duration_minutes),
+      name: input.name.trim(),
       note: input.note,
       source_id: input.source_id,
       meal_period_id: input.meal_period_id,
@@ -599,6 +619,7 @@ export async function updateMeal(mealId: string, userId: string, input: MealWrit
     if (index === -1) throw new Error('Meal not found.')
     db.meals[index] = {
       ...db.meals[index],
+      name: input.name.trim(),
       note: input.note,
       source_id: input.source_id,
       meal_period_id: input.meal_period_id,
@@ -624,6 +645,7 @@ export async function updateMeal(mealId: string, userId: string, input: MealWrit
   const { error } = await getSupabase()
     .from('meals')
     .update({
+      name: input.name.trim(),
       note: input.note,
       source_id: input.source_id,
       meal_period_id: input.meal_period_id,
@@ -660,6 +682,50 @@ export async function deleteMeal(mealId: string, userId: string): Promise<void> 
   }
   const { error } = await getSupabase().from('meals').delete().eq('id', mealId).eq('user_id', userId)
   if (error) throw new Error(error.message)
+}
+
+const PREVIOUS_FOOD_MEAL_LIMIT = 120
+
+export async function fetchPreviousFoods(userId: string): Promise<PreviousFood[]> {
+  if (usingLocalData) {
+    const db = readDb()
+    const meals = db.meals.filter((meal) => meal.user_id === userId)
+    const eatenAt = new Map(meals.map((meal) => [meal.id, meal.eaten_at]))
+    return uniquePreviousFoods(
+      db.meal_items
+        .filter((item) => eatenAt.has(item.meal_id))
+        .map((item) => ({
+          item: ensurePortion(item),
+          eaten_at: eatenAt.get(item.meal_id) ?? '',
+        })),
+    )
+  }
+
+  const { data: meals, error } = await getSupabase()
+    .from('meals')
+    .select('id, eaten_at')
+    .eq('user_id', userId)
+    .order('eaten_at', { ascending: false })
+    .limit(PREVIOUS_FOOD_MEAL_LIMIT)
+  if (error) throw new Error(error.message)
+  const mealRows = meals ?? []
+  if (!mealRows.length) return []
+
+  const { data: items, error: itemError } = await getSupabase()
+    .from('meal_items')
+    .select('*')
+    .in(
+      'meal_id',
+      mealRows.map((meal) => meal.id),
+    )
+  if (itemError) throw new Error(itemError.message)
+  const eatenAt = new Map(mealRows.map((meal) => [String(meal.id), String(meal.eaten_at)]))
+  return uniquePreviousFoods(
+    ((items ?? []) as Array<MealItem & { meal_id: string }>).map((item) => ({
+      item: ensurePortion(item),
+      eaten_at: eatenAt.get(item.meal_id) ?? '',
+    })),
+  )
 }
 
 export async function fetchSavedMeals(userId: string): Promise<SavedMeal[]> {

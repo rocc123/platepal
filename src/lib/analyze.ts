@@ -1,5 +1,6 @@
 import { normalizeAnalyzeResult, parseAnalyzeScene } from './analyzeGrouping'
 import { SYSTEM_PROMPT } from './analyzePrompt'
+import { looksLikeDishTitle, shortFoodLabel } from './mealNames'
 import { getSupabase, usingLocalData } from './supabase'
 import type { AnalyzeRequest, AnalyzeResult, MealItem } from './types'
 
@@ -24,12 +25,16 @@ function blankItem(name: string): MealItem {
 
 function localEstimate(request: AnalyzeRequest): AnalyzeResult {
   const note = request.note?.trim()
-  const title = note || (request.imageBase64 ? 'Meal from photo' : 'Meal')
+  const spoken = note && looksLikeDishTitle(note) ? note : null
+  const itemName =
+    spoken ||
+    (note ? shortFoodLabel(note) : '') ||
+    (request.imageBase64 ? 'Meal from photo' : 'Meal')
   return normalizeAnalyzeResult({
-    items: [blankItem(title)],
+    items: [blankItem(itemName)],
     totals: { calories: 0, protein_g: 0, fiber_g: 0, carbs_g: 0, fat_g: 0 },
     confidence: 0,
-    title,
+    title: spoken || undefined,
     assumptions:
       'Analyze is not configured on this device. Fill in protein and fiber, then save.',
   })

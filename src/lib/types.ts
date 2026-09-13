@@ -52,6 +52,7 @@ export type Meal = {
   user_id: string
   eaten_at: string
   duration_minutes: number
+  name: string
   note: string | null
   source_id: number
   meal_period_id: number

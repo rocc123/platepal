@@ -1,4 +1,4 @@
-const CACHE = 'plate-pal-v3'
+const CACHE = 'plate-pal-v6'
 const PRECACHE = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg']
 
 self.addEventListener('install', (event) => {

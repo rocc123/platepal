@@ -27,5 +27,9 @@ enable_confirmations = false
 subject = "Your Plate Pal sign-in code"
 content_path = "./supabase/templates/magic_link.html"
 
+[auth.email.template.confirmation]
+subject = "Your Plate Pal sign-in code"
+content_path = "./supabase/templates/confirmation.html"
+
 [functions.analyze]
 verify_jwt = true
