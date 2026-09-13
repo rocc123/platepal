@@ -5,6 +5,7 @@ import { resolveSupabaseBrowserEnv } from './env'
 import { parseDurationMinutes } from './fasting'
 import { LOOKUP_SEED, inferPeriodId, setLookups, sourceIdByCode, type Lookups } from './lookups'
 import { ensurePortion } from './portions'
+import { uniquePreviousFoods, type PreviousFood } from './previousFoods'
 import type { Meal, MealItem, MealPeriodRow, MealSourceRow, Profile, SavedMeal, SessionUser } from './types'
 
 const { url: supabaseUrl, anonKey: supabaseAnonKey } = resolveSupabaseBrowserEnv(
@@ -681,6 +682,50 @@ export async function deleteMeal(mealId: string, userId: string): Promise<void> 
   }
   const { error } = await getSupabase().from('meals').delete().eq('id', mealId).eq('user_id', userId)
   if (error) throw new Error(error.message)
+}
+
+const PREVIOUS_FOOD_MEAL_LIMIT = 120
+
+export async function fetchPreviousFoods(userId: string): Promise<PreviousFood[]> {
+  if (usingLocalData) {
+    const db = readDb()
+    const meals = db.meals.filter((meal) => meal.user_id === userId)
+    const eatenAt = new Map(meals.map((meal) => [meal.id, meal.eaten_at]))
+    return uniquePreviousFoods(
+      db.meal_items
+        .filter((item) => eatenAt.has(item.meal_id))
+        .map((item) => ({
+          item: ensurePortion(item),
+          eaten_at: eatenAt.get(item.meal_id) ?? '',
+        })),
+    )
+  }
+
+  const { data: meals, error } = await getSupabase()
+    .from('meals')
+    .select('id, eaten_at')
+    .eq('user_id', userId)
+    .order('eaten_at', { ascending: false })
+    .limit(PREVIOUS_FOOD_MEAL_LIMIT)
+  if (error) throw new Error(error.message)
+  const mealRows = meals ?? []
+  if (!mealRows.length) return []
+
+  const { data: items, error: itemError } = await getSupabase()
+    .from('meal_items')
+    .select('*')
+    .in(
+      'meal_id',
+      mealRows.map((meal) => meal.id),
+    )
+  if (itemError) throw new Error(itemError.message)
+  const eatenAt = new Map(mealRows.map((meal) => [String(meal.id), String(meal.eaten_at)]))
+  return uniquePreviousFoods(
+    ((items ?? []) as Array<MealItem & { meal_id: string }>).map((item) => ({
+      item: ensurePortion(item),
+      eaten_at: eatenAt.get(item.meal_id) ?? '',
+    })),
+  )
 }
 
 export async function fetchSavedMeals(userId: string): Promise<SavedMeal[]> {
