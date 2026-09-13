@@ -2,10 +2,13 @@ import { useEffect, useState } from 'react'
 import { analyzeMeal, resizeImageToJpeg } from '../lib/analyze'
 import { blankMealItem } from '../lib/mealItems'
 import type { MealItem } from '../lib/types'
+import { useUser } from './AuthGate'
 import { BarcodePicker } from './BarcodePicker'
 import { FoodSearch } from './FoodSearch'
 import { MethodRow, type Helper } from './MethodRow'
 import { PhotoPicker } from './PhotoPicker'
+import { PreviousFoodPicker } from './PreviousFoodPicker'
+import { usePreviousFoods } from './usePreviousFoods'
 
 export function AddFoodPanel({
   onAdd,
@@ -14,6 +17,8 @@ export function AddFoodPanel({
   onAdd: (items: MealItem[]) => void
   onClose: () => void
 }) {
+  const user = useUser()
+  const { foods: previousFoods, loading: previousLoading } = usePreviousFoods(user.id)
   const [helper, setHelper] = useState<Helper | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -66,9 +71,16 @@ export function AddFoodPanel({
   return (
     <div className="add-food-panel">
       <p className="helper-copy">
-        Add another food the same way as the first — photo, lookup, barcode, or a blank row. A
-        composed dish can stay one food.
+        Add another food the same way as the first — a previous item, photo, lookup, barcode, or a
+        blank row. A composed dish can stay one food.
       </p>
+      {previousLoading || previousFoods.length ? (
+        <PreviousFoodPicker
+          foods={previousFoods}
+          loading={previousLoading}
+          onPick={(item) => onAdd([item])}
+        />
+      ) : null}
       <MethodRow helper={helper} fileAdded={Boolean(file)} onToggle={toggleHelper} />
 
       {helper === 'photo' ? (
@@ -94,6 +106,7 @@ export function AddFoodPanel({
           <p className="helper-copy">Pick a USDA food and we add it to this meal.</p>
           <FoodSearch
             label="Search USDA"
+            previousFoods={previousFoods}
             onPick={(item) => {
               onAdd([item])
             }}

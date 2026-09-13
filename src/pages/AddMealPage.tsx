@@ -5,6 +5,8 @@ import { FoodSearch } from '../components/FoodSearch'
 import { MealEditor } from '../components/MealEditor'
 import { MethodRow, type Helper } from '../components/MethodRow'
 import { PhotoPicker } from '../components/PhotoPicker'
+import { PreviousFoodsShelf } from '../components/PreviousFoodPicker'
+import { usePreviousFoods } from '../components/usePreviousFoods'
 import { SavedMealPicker } from '../components/SavedMealPicker'
 import { useUser } from '../components/AuthGate'
 import { analyzeMeal, resizeImageToJpeg } from '../lib/analyze'
@@ -23,6 +25,7 @@ import { appendMealItems, blankMealItem } from '../lib/mealItems'
 import { mealNameFromItems } from '../lib/mealNames'
 import { defaultSavedMealName, itemsFromSavedMeal } from '../lib/savedMeals'
 import { portionAssumption } from '../lib/foods'
+import { previousFoodAssumption } from '../lib/previousFoods'
 import { createMeal, createSavedMeal, fetchSavedMeals, loadLookups } from '../lib/supabase'
 import { sumItems } from '../lib/totals'
 import type { MealItem, SavedMeal } from '../lib/types'
@@ -62,6 +65,7 @@ export function AddMealPage() {
   const [savedMealNameTouched, setSavedMealNameTouched] = useState(false)
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([])
   const [savedMealsLoading, setSavedMealsLoading] = useState(true)
+  const { foods: previousFoods, loading: previousFoodsLoading } = usePreviousFoods(user.id)
   const [analyzing, setAnalyzing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -168,6 +172,15 @@ export function AddMealPage() {
       sourceCode: 'saved',
     })
     if (!items?.some((item) => item.name.trim())) setSaveAsSavedMeal(false)
+  }
+
+  function applyPreviousFood(item: MealItem) {
+    applyFirstEstimate({
+      items: [item],
+      confidence: null,
+      assumptions: previousFoodAssumption(item.name),
+      sourceCode: 'manual',
+    })
   }
 
   async function onAnalyze() {
@@ -327,8 +340,9 @@ export function AddMealPage() {
         <p className="composer-kicker">Step 1 of 2</p>
         <h1>What was on the plate?</h1>
         <p className="lede">
-          Repeat a saved meal, or start with a note or photo. We name the dish the way you would say
-          it — a burger on lettuce stays one food, not a pile of leaves.
+          Repeat a saved meal, reuse a food you already logged, or start with a note or photo. We
+          name the dish the way you would say it — a burger on lettuce stays one food, not a pile of
+          leaves.
         </p>
 
         {items ? (
@@ -360,6 +374,12 @@ export function AddMealPage() {
             <SavedMealPicker meals={savedMeals} loading={savedMealsLoading} onPick={applySavedMeal} />
           ) : null}
         </div>
+
+        <PreviousFoodsShelf
+          foods={previousFoods}
+          loading={previousFoodsLoading}
+          onPick={applyPreviousFood}
+        />
 
         <label className="field plate-note">
           <span>
@@ -393,16 +413,23 @@ export function AddMealPage() {
 
         {helper === 'search' ? (
           <div className="helper-panel">
-            <p className="helper-copy">Pick a USDA food to skip analyze and jump straight to the numbers.</p>
+            <p className="helper-copy">
+              Foods you already logged come first. USDA is there if this one is new.
+            </p>
             <FoodSearch
-              label="Search USDA"
+              label="Search your foods or USDA"
+              previousFoods={previousFoods}
               onPick={(item, hit) => {
-                applyFirstEstimate({
-                  items: [item],
-                  confidence: 0.7,
-                  assumptions: portionAssumption('USDA FoodData Central', hit),
-                  sourceCode: 'manual',
-                })
+                if (hit) {
+                  applyFirstEstimate({
+                    items: [item],
+                    confidence: 0.7,
+                    assumptions: portionAssumption('USDA FoodData Central', hit),
+                    sourceCode: 'manual',
+                  })
+                  return
+                }
+                applyPreviousFood(item)
               }}
             />
           </div>
