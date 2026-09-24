@@ -312,7 +312,7 @@ Do not persist the image on the server.
 Day boundaries use the **browser local timezone**, not UTC date. Helper: start/end of local day → ISO for the `eaten_at` filter.
 
 ### `/add`
-- Photo picker (`input type="file" accept="image/*" capture="environment"`)
+- Photo picker: take a photo (`capture="environment"`) or upload one already on the phone (`accept="image/*"` with no `capture`, including HEIC)
 - Optional note textarea
 - Analyze button
 - Loading state
