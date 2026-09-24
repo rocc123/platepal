@@ -6,6 +6,7 @@ import {
   openBarcodeCamera,
   waitForVideoFrame,
 } from '../lib/barcode'
+import { isImageFile } from '../lib/imageFile'
 import { hitSourceLabel, itemFromHit, lookupBarcode, lookupConfidence, portionAssumption } from '../lib/foods'
 import type { MealItem } from '../lib/types'
 
@@ -112,8 +113,8 @@ export function BarcodePicker({
 
   async function fromPhoto(file: File) {
     setError(null)
-    if (!file.type.startsWith('image/') && file.type !== '') {
-      setError('That file is not an image.')
+    if (!isImageFile(file)) {
+      setError('That file is not a photo.')
       return
     }
     setBusy(true)
@@ -180,19 +181,35 @@ export function BarcodePicker({
           </button>
         )}
       </div>
-      <label className="photo-btn file-btn">
-        Use a barcode photo
-        <input
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={(event) => {
-            const file = event.target.files?.[0]
-            event.target.value = ''
-            if (file) void fromPhoto(file)
-          }}
-        />
-      </label>
+      <div className="photo-actions">
+        <label className="photo-btn file-btn">
+          <strong>Take a barcode photo</strong>
+          <span>Open the camera</span>
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              if (file) void fromPhoto(file)
+            }}
+          />
+        </label>
+        <label className="photo-btn file-btn">
+          <strong>Upload from phone</strong>
+          <span>Camera roll or files</span>
+          <input
+            type="file"
+            accept="image/*,.heic,.heif,.jpg,.jpeg,.png,.webp"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              if (file) void fromPhoto(file)
+            }}
+          />
+        </label>
+      </div>
       {error ? <p className="error">{error}</p> : null}
     </div>
   )

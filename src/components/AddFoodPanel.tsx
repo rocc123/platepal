@@ -86,8 +86,8 @@ export function AddFoodPanel({
       {helper === 'photo' ? (
         <div className="helper-panel nested">
           <p className="helper-copy">
-            A plated side or a recipe card both work. We add whatever we find; you can still edit
-            the numbers.
+            A plated side or a recipe card both work. Take a photo or upload one from your phone.
+            We add whatever we find; you can still edit the numbers.
           </p>
           <PhotoPicker previewUrl={previewUrl} onPick={pickFile} onClear={clearFile} />
           <button
@@ -117,7 +117,7 @@ export function AddFoodPanel({
       {helper === 'barcode' ? (
         <div className="helper-panel nested">
           <p className="helper-copy">
-            Scan with the camera, take a barcode photo, or type the number. Check the serving
+            Scan with the camera, upload a barcode photo from your phone, or type the number. Check the serving
             before you save.
           </p>
           <BarcodePicker

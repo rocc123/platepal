@@ -1,4 +1,5 @@
-import { useId, useState } from 'react'
+import { useState, type ChangeEvent } from 'react'
+import { isImageFile } from '../lib/imageFile'
 
 type PhotoPickerProps = {
   previewUrl: string | null
@@ -6,29 +7,25 @@ type PhotoPickerProps = {
   onClear: () => void
 }
 
+const LIBRARY_ACCEPT = 'image/*,.heic,.heif,.jpg,.jpeg,.png,.webp'
+
 export function PhotoPicker({ previewUrl, onPick, onClear }: PhotoPickerProps) {
-  const id = useId()
   const [error, setError] = useState<string | null>(null)
+
+  function onChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!isImageFile(file)) {
+      setError('That file is not a photo. Choose a picture from your camera roll.')
+      return
+    }
+    setError(null)
+    onPick(file)
+  }
 
   return (
     <div className="photo">
-      <input
-        id={id}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        onChange={(event) => {
-          const file = event.target.files?.[0]
-          event.target.value = ''
-          if (!file) return
-          if (!file.type.startsWith('image/')) {
-            setError('That file is not an image.')
-            return
-          }
-          setError(null)
-          onPick(file)
-        }}
-      />
       {previewUrl ? (
         <>
           <img src={previewUrl} alt="Selected meal" />
@@ -37,9 +34,18 @@ export function PhotoPicker({ previewUrl, onPick, onClear }: PhotoPickerProps) {
           </button>
         </>
       ) : (
-        <label className="photo-btn" htmlFor={id}>
-          Take or pick a photo
-        </label>
+        <div className="photo-actions">
+          <label className="photo-btn file-btn">
+            <strong>Take a photo</strong>
+            <span>Open the camera</span>
+            <input type="file" accept="image/*" capture="environment" onChange={onChange} />
+          </label>
+          <label className="photo-btn file-btn">
+            <strong>Upload from phone</strong>
+            <span>Camera roll or files</span>
+            <input type="file" accept={LIBRARY_ACCEPT} onChange={onChange} />
+          </label>
+        </div>
       )}
       {error ? <p className="error">{error}</p> : null}
     </div>

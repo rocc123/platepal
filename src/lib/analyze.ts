@@ -1,5 +1,6 @@
 import { normalizeAnalyzeResult, parseAnalyzeScene } from './analyzeGrouping'
 import { SYSTEM_PROMPT } from './analyzePrompt'
+import { isImageFile } from './imageFile'
 import { looksLikeDishTitle, shortFoodLabel } from './mealNames'
 import { getSupabase, usingLocalData } from './supabase'
 import type { AnalyzeRequest, AnalyzeResult, MealItem } from './types'
@@ -41,11 +42,16 @@ function localEstimate(request: AnalyzeRequest): AnalyzeResult {
 }
 
 export async function resizeImageToJpeg(file: File): Promise<{ base64: string; mimeType: 'image/jpeg' }> {
-  if (!file.type.startsWith('image/')) {
-    throw new Error('That file is not an image.')
+  if (!isImageFile(file)) {
+    throw new Error('That file is not a photo.')
   }
 
-  const bitmap = await createImageBitmap(file)
+  let bitmap: ImageBitmap
+  try {
+    bitmap = await createImageBitmap(file)
+  } catch {
+    throw new Error('Could not read that photo. Try a JPEG or PNG from your camera roll.')
+  }
   const longEdge = Math.max(bitmap.width, bitmap.height)
   const scale = longEdge > ANALYZE_IMAGE_MAX_EDGE ? ANALYZE_IMAGE_MAX_EDGE / longEdge : 1
   const width = Math.round(bitmap.width * scale)

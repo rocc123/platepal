@@ -404,8 +404,9 @@ export function AddMealPage() {
         {helper === 'photo' ? (
           <div className="helper-panel">
             <p className="helper-copy">
-              A photo is enough on its own. A plated meal or a recipe card both work — recipes log as
-              the finished dish, not one row per ingredient.
+              A photo is enough on its own. Take one now, or upload a picture already on your phone.
+              A plated meal or a recipe card both work — recipes log as the finished dish, not one row
+              per ingredient.
             </p>
             <PhotoPicker previewUrl={previewUrl} onPick={pickFile} onClear={clearFile} />
           </div>
@@ -438,7 +439,7 @@ export function AddMealPage() {
         {helper === 'barcode' ? (
           <div className="helper-panel">
             <p className="helper-copy">
-              Scan with the camera, take a barcode photo, or type the number. That also skips
+              Scan with the camera, upload a barcode photo from your phone, or type the number. That also skips
               analyze. US products use the USDA copy of the label; anything else comes from Open
               Food Facts, so check the serving there.
             </p>

@@ -401,6 +401,12 @@ textarea {
   clip: rect(0 0 0 0);
 }
 
+.photo-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
 .photo-btn {
   display: flex;
   align-items: center;
@@ -413,6 +419,21 @@ textarea {
   cursor: pointer;
   text-align: center;
   padding: 16px;
+}
+
+.photo-actions .photo-btn {
+  min-height: 108px;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.photo-actions .photo-btn strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.photo-actions .photo-btn span {
+  font-size: 0.78rem;
 }
 
 .photo img {
