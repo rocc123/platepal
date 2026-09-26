@@ -3,8 +3,6 @@ import { enrichUsdaHit, itemFromHit, searchUsdaFoods, type FoodHit } from '../li
 import { filterPreviousFoods, previousFoodDetail, type PreviousFood } from '../lib/previousFoods'
 import type { MealItem } from '../lib/types'
 
-const RECENT_PREVIOUS_LIMIT = 8
-
 export function FoodSearch({
   onPick,
   previousFoods = [],
@@ -19,10 +17,10 @@ export function FoodSearch({
   const [loading, setLoading] = useState(false)
   const [picking, setPicking] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const previousHits = useMemo(() => {
-    const matched = filterPreviousFoods(previousFoods, query)
-    return query.trim() ? matched : matched.slice(0, RECENT_PREVIOUS_LIMIT)
-  }, [previousFoods, query])
+  const previousHits = useMemo(
+    () => (query.trim() ? filterPreviousFoods(previousFoods, query) : []),
+    [previousFoods, query],
+  )
 
   useEffect(() => {
     const trimmed = query.trim()

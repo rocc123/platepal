@@ -18,7 +18,11 @@ export function PreviousFoodPicker({
   onPick: (item: MealItem) => void
 }) {
   const [query, setQuery] = useState('')
-  const filtered = useMemo(() => filterPreviousFoods(foods, query), [foods, query])
+  const hasQuery = query.trim().length > 0
+  const filtered = useMemo(
+    () => (hasQuery ? filterPreviousFoods(foods, query) : []),
+    [foods, query, hasQuery],
+  )
 
   if (loading) return <p className="status">Loading foods you have logged…</p>
 
@@ -37,7 +41,7 @@ export function PreviousFoodPicker({
         </label>
       ) : null}
       {foods.length === 0 ? <p className="helper-copy">{emptyHint}</p> : null}
-      {foods.length > 0 && filtered.length === 0 ? (
+      {foods.length > 0 && hasQuery && filtered.length === 0 ? (
         <p className="helper-copy">No previous foods match that name.</p>
       ) : null}
       {filtered.length ? (
