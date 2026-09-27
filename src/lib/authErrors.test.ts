@@ -4,9 +4,15 @@ import {
   authRedirectTo,
   emailOtpRequestOptions,
   friendlyAuthError,
+  inboxHintForEmail,
   isFreshOtpSend,
   isLeftoverUnconfirmedAuthError,
+  isMicrosoftInbox,
+  isYahooInbox,
+  otpRequestHint,
+  otpSentFollowUp,
   shouldResendSignupConfirmation,
+  strictInboxForEmail,
 } from './authErrors.ts'
 
 describe('friendlyAuthError', () => {
@@ -27,7 +33,7 @@ describe('friendlyAuthError', () => {
   it('explains a send failure', () => {
     assert.equal(
       friendlyAuthError('Error sending confirmation email'),
-      'The email did not go out. Wait a minute and tap Resend. Check Junk for an older code.',
+      'The email did not go out. Wait a minute and tap Resend. Check Junk, Spam, or Bulk for an older code.',
     )
   })
 
@@ -77,6 +83,40 @@ describe('leftover unconfirmed signup', () => {
     assert.equal(shouldResendSignupConfirmation('Email not confirmed'), true)
     assert.equal(shouldResendSignupConfirmation('For security purposes, you can only request this after 42 seconds.'), false)
     assert.equal(shouldResendSignupConfirmation(null), false)
+  })
+})
+
+describe('inbox provider hints', () => {
+  it('treats Yahoo and AOL domains as Yahoo inboxes', () => {
+    assert.equal(isYahooInbox('pat@yahoo.com'), true)
+    assert.equal(isYahooInbox('pat@yahoo.co.uk'), true)
+    assert.equal(isYahooInbox('pat@ymail.com'), true)
+    assert.equal(isYahooInbox('pat@rocketmail.com'), true)
+    assert.equal(isYahooInbox('pat@aol.com'), true)
+    assert.equal(isYahooInbox('pat@gmail.com'), false)
+    assert.equal(strictInboxForEmail('pat@yahoo.com'), 'yahoo')
+  })
+
+  it('treats Outlook and Hotmail domains as Microsoft inboxes', () => {
+    assert.equal(isMicrosoftInbox('pat@outlook.com'), true)
+    assert.equal(isMicrosoftInbox('pat@hotmail.co.uk'), true)
+    assert.equal(isMicrosoftInbox('pat@live.com'), true)
+    assert.equal(isMicrosoftInbox('pat@yahoo.com'), false)
+    assert.equal(strictInboxForEmail('pat@live.com'), 'microsoft')
+  })
+
+  it('warns Yahoo addresses before and after a send', () => {
+    assert.match(otpRequestHint('pat@yahoo.com'), /Spam and Bulk/)
+    assert.match(otpSentFollowUp('pat@yahoo.com', true), /Spam or Bulk/)
+    assert.match(otpSentFollowUp('pat@yahoo.com', false), /Spam and Bulk/)
+    assert.match(inboxHintForEmail('pat@yahoo.com'), /Yahoo often hides/)
+    assert.match(inboxHintForEmail('pat@outlook.com'), /Outlook and Hotmail/)
+    assert.match(inboxHintForEmail('pat@gmail.com'), /Some inboxes hide/)
+    assert.equal(
+      otpRequestHint('pat@gmail.com'),
+      'We email a number you type in this app. Home-screen installs cannot use an email link.',
+    )
+    assert.equal(otpSentFollowUp('pat@gmail.com', true), 'Type the number here — nothing to tap.')
   })
 })
 
