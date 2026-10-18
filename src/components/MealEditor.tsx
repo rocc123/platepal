@@ -41,7 +41,6 @@ type MealEditorProps = {
   onSave: () => void
   onCancel: () => void
   onDelete?: () => void
-  onSaveAsSavedMeal?: () => void
 }
 
 function parseNumber(value: string): number {
@@ -97,7 +96,6 @@ export function MealEditor({
   onSave,
   onCancel,
   onDelete,
-  onSaveAsSavedMeal,
 }: MealEditorProps) {
   const totals = sumItems(items)
   const [adding, setAdding] = useState(false)
@@ -330,20 +328,6 @@ export function MealEditor({
         </div>
       ) : null}
 
-      {onSaveAsSavedMeal ? (
-        <div className="saved-keep">
-          <label className="field">
-            <span>Saved meal name</span>
-            <input
-              type="text"
-              value={savedMealName}
-              onChange={(event) => onSavedMealNameChange(event.target.value)}
-              placeholder="Oat Breakfast"
-            />
-          </label>
-        </div>
-      ) : null}
-
       {error ? <p className="error">{error}</p> : null}
 
       <div className="row-actions">
@@ -353,11 +337,6 @@ export function MealEditor({
         <button type="button" className="btn-secondary" disabled={saving} onClick={onCancel}>
           Cancel
         </button>
-        {onSaveAsSavedMeal ? (
-          <button type="button" className="btn-secondary" disabled={saving} onClick={onSaveAsSavedMeal}>
-            Keep this meal
-          </button>
-        ) : null}
         {onDelete ? (
           <button type="button" className="btn-danger" disabled={saving} onClick={onDelete}>
             {deleteLabel}
