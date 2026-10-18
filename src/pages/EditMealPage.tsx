@@ -23,13 +23,13 @@ export function EditMealPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [status, setStatus] = useState<string | null>(null)
   const [lookups, setLookupsState] = useState(getLookups)
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
   const [durationMinutes, setDurationMinutes] = useState(DEFAULT_MEAL_DURATION_MINUTES)
   const [periodId, setPeriodId] = useState(0)
   const [periodTouched, setPeriodTouched] = useState(false)
+  const [saveAsSavedMeal, setSaveAsSavedMeal] = useState(false)
   const [savedMealName, setSavedMealName] = useState('')
   const [savedMealNameTouched, setSavedMealNameTouched] = useState(false)
 
@@ -101,6 +101,14 @@ export function EditMealPage() {
         ...stamp,
         ...totals,
       })
+      if (saveAsSavedMeal) {
+        await createSavedMeal(user.id, {
+          name: resolvedSavedName.trim() || suggestedSavedName,
+          note: note.trim() || null,
+          items: named,
+          ...totals,
+        })
+      }
       navigate('/', { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save meal.')
@@ -117,30 +125,6 @@ export function EditMealPage() {
       navigate('/', { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not delete meal.')
-      setSaving(false)
-    }
-  }
-
-  async function onSaveAsSavedMeal() {
-    const named = items.filter((item) => item.name.trim())
-    if (!named.length) {
-      setError('Add at least one food.')
-      return
-    }
-    setSaving(true)
-    setError(null)
-    try {
-      const totals = sumItems(named)
-      await createSavedMeal(user.id, {
-        name: resolvedSavedName.trim() || suggestedSavedName,
-        note: note.trim() || null,
-        items: named,
-        ...totals,
-      })
-      setStatus(`Kept as “${resolvedSavedName.trim() || suggestedSavedName}”.`)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save that meal.')
-    } finally {
       setSaving(false)
     }
   }
@@ -163,7 +147,6 @@ export function EditMealPage() {
   return (
     <div className="page">
       <h1>Edit meal</h1>
-      {status ? <p className="status">{status}</p> : null}
       <MealEditor
         name={resolvedMealName}
         note={note}
@@ -175,8 +158,8 @@ export function EditMealPage() {
         lookups={lookups}
         confidence={meal.confidence}
         assumptions=""
-        saveAsSavedMeal={false}
-        showSavedMealCheckbox={false}
+        saveAsSavedMeal={saveAsSavedMeal}
+        showSavedMealCheckbox
         savedMealName={resolvedSavedName}
         saving={saving}
         error={error}
@@ -211,7 +194,7 @@ export function EditMealPage() {
           setPeriodId(next)
           setPeriodTouched(true)
         }}
-        onSaveAsSavedMealChange={() => undefined}
+        onSaveAsSavedMealChange={setSaveAsSavedMeal}
         onSavedMealNameChange={(next) => {
           setSavedMealNameTouched(true)
           setSavedMealName(next)
@@ -219,7 +202,6 @@ export function EditMealPage() {
         onSave={onSave}
         onCancel={() => navigate('/')}
         onDelete={onDelete}
-        onSaveAsSavedMeal={onSaveAsSavedMeal}
       />
     </div>
   )
