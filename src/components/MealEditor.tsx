@@ -24,6 +24,9 @@ type MealEditorProps = {
   showSavedMealCheckbox: boolean
   savedMealName: string
   compactWhen?: boolean
+  showWhen?: boolean
+  saveLabel?: string
+  deleteLabel?: string
   saving: boolean
   error: string | null
   onNameChange: (name: string) => void
@@ -77,6 +80,9 @@ export function MealEditor({
   showSavedMealCheckbox,
   savedMealName,
   compactWhen = false,
+  showWhen = true,
+  saveLabel = 'Save meal',
+  deleteLabel = 'Delete meal',
   saving,
   error,
   onNameChange,
@@ -111,18 +117,20 @@ export function MealEditor({
 
   return (
     <div className="editor">
-      <MealWhen
-        date={date}
-        time={time}
-        durationMinutes={durationMinutes}
-        periodId={periodId}
-        lookups={lookups}
-        compact={compactWhen}
-        onDateChange={onDateChange}
-        onTimeChange={onTimeChange}
-        onDurationChange={onDurationChange}
-        onPeriodChange={onPeriodChange}
-      />
+      {showWhen ? (
+        <MealWhen
+          date={date}
+          time={time}
+          durationMinutes={durationMinutes}
+          periodId={periodId}
+          lookups={lookups}
+          compact={compactWhen}
+          onDateChange={onDateChange}
+          onTimeChange={onTimeChange}
+          onDurationChange={onDurationChange}
+          onPeriodChange={onPeriodChange}
+        />
+      ) : null}
 
       <label className="field">
         <span>Meal name</span>
@@ -340,7 +348,7 @@ export function MealEditor({
 
       <div className="row-actions">
         <button type="button" className="btn" disabled={saving} onClick={onSave}>
-          {saving ? 'Saving…' : 'Save meal'}
+          {saving ? 'Saving…' : saveLabel}
         </button>
         <button type="button" className="btn-secondary" disabled={saving} onClick={onCancel}>
           Cancel
@@ -352,7 +360,7 @@ export function MealEditor({
         ) : null}
         {onDelete ? (
           <button type="button" className="btn-danger" disabled={saving} onClick={onDelete}>
-            Delete meal
+            {deleteLabel}
           </button>
         ) : null}
       </div>

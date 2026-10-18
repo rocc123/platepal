@@ -748,21 +748,19 @@ function hydrateSavedMeal(meal: SavedMeal): SavedMeal {
   return { ...meal, items: (meal.items ?? []).map(ensurePortion) }
 }
 
-export async function createSavedMeal(
-  userId: string,
-  input: {
-    name: string
-    note: string | null
-    calories: number
-    protein_g: number
-    fiber_g: number
-    carbs_g: number
-    fat_g: number
-    items: MealItem[]
-  },
-): Promise<void> {
-  const row = {
-    user_id: userId,
+type SavedMealInput = {
+  name: string
+  note: string | null
+  calories: number
+  protein_g: number
+  fiber_g: number
+  carbs_g: number
+  fat_g: number
+  items: MealItem[]
+}
+
+function savedMealFields(input: SavedMealInput) {
+  return {
     name: input.name.trim(),
     note: input.note,
     calories: input.calories,
@@ -772,6 +770,20 @@ export async function createSavedMeal(
     fat_g: input.fat_g,
     items: input.items,
   }
+}
+
+export async function fetchSavedMeal(id: string, userId: string): Promise<SavedMeal | null> {
+  if (usingLocalData) {
+    const found = readDb().saved_meals.find((m) => m.id === id && m.user_id === userId)
+    return found ? hydrateSavedMeal(found) : null
+  }
+  const { data, error } = await getSupabase().from('saved_meals').select('*').eq('id', id).eq('user_id', userId).maybeSingle()
+  if (error) throw new Error(error.message)
+  return data ? hydrateSavedMeal(data as SavedMeal) : null
+}
+
+export async function createSavedMeal(userId: string, input: SavedMealInput): Promise<void> {
+  const row = { user_id: userId, ...savedMealFields(input) }
   if (usingLocalData) {
     const db = readDb()
     db.saved_meals.push({
@@ -786,17 +798,25 @@ export async function createSavedMeal(
   if (error) throw new Error(error.message)
 }
 
-export async function renameSavedMeal(id: string, userId: string, name: string): Promise<void> {
+// Meals already logged from this saved meal keep their own copies, so this only changes future use.
+export async function updateSavedMeal(id: string, userId: string, input: SavedMealInput): Promise<void> {
+  const fields = savedMealFields(input)
   if (usingLocalData) {
     const db = readDb()
     const found = db.saved_meals.find((m) => m.id === id && m.user_id === userId)
     if (!found) throw new Error('Saved meal not found.')
-    found.name = name.trim()
+    Object.assign(found, fields)
     writeDb(db)
     return
   }
-  const { error } = await getSupabase().from('saved_meals').update({ name: name.trim() }).eq('id', id).eq('user_id', userId)
+  const { data, error } = await getSupabase()
+    .from('saved_meals')
+    .update(fields)
+    .eq('id', id)
+    .eq('user_id', userId)
+    .select('id')
   if (error) throw new Error(error.message)
+  if (!data?.length) throw new Error('Saved meal not found.')
 }
 
 export async function deleteSavedMeal(id: string, userId: string): Promise<void> {

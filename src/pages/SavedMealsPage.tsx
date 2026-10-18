@@ -5,7 +5,7 @@ import { inferPeriodFromWhen, nowLocal, zoneStamp } from '../lib/dates'
 import { DEFAULT_MEAL_DURATION_MINUTES } from '../lib/fasting'
 import { sourceIdByCode } from '../lib/lookups'
 import { filterSavedMeals, itemsFromSavedMeal } from '../lib/savedMeals'
-import { createMeal, deleteSavedMeal, fetchSavedMeals, renameSavedMeal } from '../lib/supabase'
+import { createMeal, deleteSavedMeal, fetchSavedMeals } from '../lib/supabase'
 import { formatFocusLine, formatOtherLine } from '../lib/totals'
 import type { SavedMeal } from '../lib/types'
 
@@ -16,8 +16,6 @@ export function SavedMealsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
-  const [renamingId, setRenamingId] = useState<string | null>(null)
-  const [renameValue, setRenameValue] = useState('')
   const [busyId, setBusyId] = useState<string | null>(null)
   const visible = useMemo(() => filterSavedMeals(meals, query), [meals, query])
 
@@ -71,21 +69,6 @@ export function SavedMealsPage() {
     }
   }
 
-  async function onRename(id: string) {
-    if (!renameValue.trim()) return
-    setBusyId(id)
-    setError(null)
-    try {
-      await renameSavedMeal(id, user.id, renameValue)
-      setRenamingId(null)
-      await reload()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not rename.')
-    } finally {
-      setBusyId(null)
-    }
-  }
-
   async function onDelete(id: string) {
     setBusyId(id)
     setError(null)
@@ -125,57 +108,27 @@ export function SavedMealsPage() {
         <div className="meal-list">
           {visible.map((meal) => (
             <article className="card saved-row" key={meal.id}>
-              {renamingId === meal.id ? (
-                <>
-                  <label className="field">
-                    <span>Name</span>
-                    <input
-                      type="text"
-                      value={renameValue}
-                      onChange={(event) => setRenameValue(event.target.value)}
-                    />
-                  </label>
-                  <div className="row-actions two">
-                    <button type="button" className="btn" disabled={busyId === meal.id} onClick={() => onRename(meal.id)}>
-                      Save name
-                    </button>
-                    <button type="button" className="btn-secondary" onClick={() => setRenamingId(null)}>
-                      Cancel
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <button type="button" className="saved-main" onClick={() => cloneMeal(meal)} disabled={busyId === meal.id}>
-                    <strong>{meal.name}</strong>
-                    <span className="muted">
-                      {formatFocusLine(meal.protein_g, meal.fiber_g)}
-                      <br />
-                      {formatOtherLine(meal.calories, meal.carbs_g, meal.fat_g)}
-                    </span>
-                  </button>
-                  <div className="row-actions two">
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      onClick={() => {
-                        setRenamingId(meal.id)
-                        setRenameValue(meal.name)
-                      }}
-                    >
-                      Rename
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-danger"
-                      disabled={busyId === meal.id}
-                      onClick={() => onDelete(meal.id)}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </>
-              )}
+              <button type="button" className="saved-main" onClick={() => cloneMeal(meal)} disabled={busyId === meal.id}>
+                <strong>{meal.name}</strong>
+                <span className="muted">
+                  {formatFocusLine(meal.protein_g, meal.fiber_g)}
+                  <br />
+                  {formatOtherLine(meal.calories, meal.carbs_g, meal.fat_g)}
+                </span>
+              </button>
+              <div className="row-actions two">
+                <button type="button" className="btn-secondary" onClick={() => navigate(`/saved/${meal.id}`)}>
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className="btn-danger"
+                  disabled={busyId === meal.id}
+                  onClick={() => onDelete(meal.id)}
+                >
+                  Delete
+                </button>
+              </div>
             </article>
           ))}
         </div>
