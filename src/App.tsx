@@ -3,6 +3,7 @@ import { Analytics } from '@vercel/analytics/react'
 import { AuthGate } from './components/AuthGate'
 import { AddMealPage } from './pages/AddMealPage'
 import { EditMealPage } from './pages/EditMealPage'
+import { EditSavedMealPage } from './pages/EditSavedMealPage'
 import { LoginPage } from './pages/LoginPage'
 import { ChartsPage } from './pages/ChartsPage'
 import { SavedMealsPage } from './pages/SavedMealsPage'
@@ -11,7 +12,7 @@ import { TodayPage } from './pages/TodayPage'
 
 function Shell() {
   const location = useLocation()
-  const hideNav = location.pathname === '/add' || location.pathname.startsWith('/meals/')
+  const hideNav = location.pathname === '/add' || location.pathname.startsWith('/meals/') || location.pathname.startsWith('/saved/')
 
   return (
     <>
@@ -71,6 +72,7 @@ export default function App() {
           <Route path="/meals/:id" element={<EditMealPage />} />
           <Route path="/charts" element={<ChartsPage />} />
           <Route path="/saved" element={<SavedMealsPage />} />
+          <Route path="/saved/:id" element={<EditSavedMealPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
