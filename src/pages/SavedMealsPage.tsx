@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useUser } from '../components/AuthGate'
+import { ConfirmDelete } from '../components/ConfirmDelete'
 import { inferPeriodFromWhen, nowLocal, zoneStamp } from '../lib/dates'
 import { DEFAULT_MEAL_DURATION_MINUTES } from '../lib/fasting'
 import { sourceIdByCode } from '../lib/lookups'
@@ -120,14 +121,12 @@ export function SavedMealsPage() {
                 <button type="button" className="btn-secondary" onClick={() => navigate(`/saved/${meal.id}`)}>
                   Edit
                 </button>
-                <button
-                  type="button"
-                  className="btn-danger"
+                <ConfirmDelete
+                  label="Delete"
+                  prompt={`Delete “${meal.name}”?`}
                   disabled={busyId === meal.id}
-                  onClick={() => onDelete(meal.id)}
-                >
-                  Delete
-                </button>
+                  onConfirm={() => onDelete(meal.id)}
+                />
               </div>
             </article>
           ))}
