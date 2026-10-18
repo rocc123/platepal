@@ -122,6 +122,7 @@ export function EditSavedMealPage() {
         showWhen={false}
         saveLabel="Save changes"
         deleteLabel="Delete saved meal"
+        deletePrompt="Delete this saved meal?"
         saving={saving}
         error={error}
         onNameChange={setName}

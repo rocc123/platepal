@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { AddFoodPanel } from './AddFoodPanel'
+import { ConfirmDelete } from './ConfirmDelete'
 import { MealWhen } from './MealWhen'
 import { PortionField } from './PortionField'
 import { mergeMealItems } from '../lib/analyzeGrouping'
@@ -27,6 +28,7 @@ type MealEditorProps = {
   showWhen?: boolean
   saveLabel?: string
   deleteLabel?: string
+  deletePrompt?: string
   saving: boolean
   error: string | null
   onNameChange: (name: string) => void
@@ -82,6 +84,7 @@ export function MealEditor({
   showWhen = true,
   saveLabel = 'Save meal',
   deleteLabel = 'Delete meal',
+  deletePrompt = 'Delete this meal?',
   saving,
   error,
   onNameChange,
@@ -338,9 +341,7 @@ export function MealEditor({
           Cancel
         </button>
         {onDelete ? (
-          <button type="button" className="btn-danger" disabled={saving} onClick={onDelete}>
-            {deleteLabel}
-          </button>
+          <ConfirmDelete label={deleteLabel} prompt={deletePrompt} disabled={saving} onConfirm={onDelete} />
         ) : null}
       </div>
     </div>
