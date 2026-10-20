@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { isFreshOtpSend } from '../lib/authErrors'
+import { inboxHintForEmail, isFreshOtpSend, otpRequestHint, otpSentFollowUp } from '../lib/authErrors'
 import {
   clearOtpEmail,
   completeEmailAuthFromUrl,
@@ -158,13 +158,11 @@ export function LoginPage() {
               <p className="status">
                 {freshSend ? (
                   <>
-                    A 6-digit code is on its way to <strong>{email}</strong>. Type the number here —
-                    nothing to tap.
+                    A 6-digit code is on its way to <strong>{email}</strong>. {otpSentFollowUp(email, true)}
                   </>
                 ) : (
                   <>
-                    Enter the last code we sent to <strong>{email}</strong>. If you do not have it,
-                    check Junk, then tap Resend.
+                    Enter the last code we sent to <strong>{email}</strong>. {otpSentFollowUp(email, false)}
                   </>
                 )}
               </p>
@@ -183,14 +181,10 @@ export function LoginPage() {
                   required
                 />
               </label>
-              <p className="hint">
-                No code? Check Junk / Spam. Outlook and Hotmail often hide this email.
-              </p>
+              <p className="hint">{inboxHintForEmail(email)}</p>
             </>
           ) : !usingLocalData ? (
-            <p className="hint">
-              We email a number you type in this app. Home-screen installs cannot use an email link.
-            </p>
+            <p className="hint">{otpRequestHint(email)}</p>
           ) : null}
 
           {sent && !usingLocalData ? (
